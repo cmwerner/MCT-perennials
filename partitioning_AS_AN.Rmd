@@ -1,0 +1,146 @@
+---
+title: "Partitioning seedbank annual - nonseedbank annual"
+output: html_document
+---
+
+Goal is to look at the strength of the storage effect in seedbanking annual (AS) and nonseedbanking annual (AN) species interactions. We want to measure how the storage effect [and the relative strength of storage effect:relative nonlinearity] changes with 1. magnitude of envrionmental variation 2. autocorrelation of environmental variation
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## Parameters and set up
+Setting parameters we're going to use for alpha and lambda under different environmental conditions. Starting with the lambda and alpha parameters for Avena (as our AN) and Erodium (as our AS) from Hallett et al. 2019 Ecology Letters paper, using the "controlRain" treatment as our wet environment and the "consistentDry" treatment for our dry environment. Also going to use the seedbank parameters for Erodium listed in that ms, which references Rice 1985, and simplifying the Avena to being non-seedbanking (so shifting its survival in the seed bank proportion from 0.4 to 0)
+
+*I'm not sure if this parameter set makes the best sense to use, since Erodium has a higher lambda in the ControlDry treatment and Avena is the other way around -- we want something where they both prefer the same conditions but are affected in different ways?*
+
+```{r parameters}
+ pars <- read.csv('model_parameters_hallett.csv')
+
+# seed survival and germination fractions
+as <- 0 # changed to 0 to be a fully non-seedbanking species
+ag <- 0.9
+es <- 0.82
+eg <- 0.6
+```
+
+Functions for coexistence calculations (currently taken from Hallett et al 2019)
+
+```{r functions-coexistence}
+# Determine equilibrium conditions for each species in isolation 
+pop.equilibrium <- function (N0, s, g, a_intra, lambda) {
+  # to run for only a single timestep
+  N <- s*(1-g)*N0 + N0*(lambda*g)/(1+a_intra*N0)
+  return(N)
+}
+
+# invader population growth rate one time step forward
+pop.invade <- function (N0, resident, s, g, a_inter, lambda) {
+  # to run for only a single timestep
+  N <- s*(1-g)*N0 + N0*(lambda*g)/(1+a_inter*resident)
+  return(N)
+}
+
+# resident population growth rate one time step forward
+pop.resident <- function (N0, resident, s, g, a_intra, a_inter, lambda) {
+  # to run for only a single timestep
+  N <- s*(1-g)*resident + resident*(lambda*g)/(1+a_intra*resident+a_inter*N0)
+  return(N)
+}
+```
+
+## Running models
+
+Running AN to equilibrium. Just using a starting population of 100 for both AN and AS
+```{r an-eq}
+N0 <- 100
+time.steps <- 100
+env.draw <- rbinom(time.steps, 1, 0.5)
+env.cond <- if_else(env.draw > 0, 'controlRain','consistentDry')
+N_avena <- rep(NA, time.steps)
+N_avena[1] <- N0
+
+for (t in 1:time.steps) {
+  params <- pars %>% filter(species=='Avena', treatment==env.cond[t])
+  N_avena[t+1] <- pop.equilibrium(N0=N_avena[t], s=as, g=ag, a_intra=params$aiA, lambda=params$lambda)
+}
+
+# check output
+plot(seq(1:(time.steps+1)), N_avena, type="l")
+```
+
+Running AS to equilibrium on the same time series
+```{r as-eq}
+N0 <- 100
+N_erodium <- rep(NA, time.steps)
+N_erodium[1] <- N0
+
+for (t in 1:time.steps) {
+  params <- pars %>% filter(species=='Erodium', treatment==env.cond[t])
+  N_erodium[t+1] <- pop.equilibrium(N0=N_erodium[t], s=es, g=eg, a_intra=params$aiE, lambda=params$lambda)
+}
+
+# check output
+plot(seq(1:(time.steps+1)), N_erodium, type="l")
+```
+
+
+Invading AN into AS 
+```{r an-invade}
+# invade avena first
+start.time <- 50
+avena_invade <- rep (NA, time.steps - start.time)
+erodium_resident <- rep (NA, time.steps - start.time)
+temp <- 1
+for (t in start.time:time.steps) {
+  params <- pars %>% filter(species=='Avena', treatment==env.cond[t])
+  params_resident <- pars %>% filter(species=='Erodium', treatment==env.cond[t])
+  avena_invade[temp] <- pop.invade(N0=1, resident=N_erodium[t], s=as, g=ag, a_inter=params$aiE, lambda=params$lambda)
+  
+  # sanity check that the resident isn't affected
+  erodium_new <- pop.resident(N0=1, resident=N_erodium[t], s=es, g=eg, 
+                              a_intra=params_resident$aiE, a_inter=params_resident$aiA, 
+                              lambda=params_resident$lambda)
+  erodium_resident[temp] <- erodium_new/N_erodium[t]
+  
+  temp  <- temp + 1 
+}
+```
+
+Invading AS into AN
+```{r as-invade}
+erodium_invade <- rep (NA, time.steps - start.time)
+avena_resident <- rep (NA, time.steps - start.time)
+temp <- 1
+for (t in start.time:time.steps) {
+  params <- pars %>% filter(species=='Erodium', treatment==env.cond[t])
+  params_resident <- pars %>% filter(species=='Avena', treatment==env.cond[t])
+  
+  erodium_invade[temp] <- pop.invade(N0=1, resident=N_avena[t], s=es, g=eg, a_inter=params$aiA, lambda=params$lambda)
+  
+  # sanity check that the resident isn't affected
+  avena_new <- pop.resident(N0=1, resident=N_avena[t], s=as, g=ag, 
+                            a_intra=params_resident$aiA, a_inter=params_resident$aiE, 
+                            lambda=params_resident$lambda)
+  avena_resident[temp] <- avena_new/N_avena[t]
+  temp  <- temp + 1 
+}
+
+```
+
+Taking the log of these data frames, plotting to check output
+```{r inv-res-log}
+avena_invader <- log(avena_invade)
+erodium_invader <- log(erodium_invade)
+
+avena_r <- log(avena_resident)
+erodium_r <- log(erodium_resident)
+
+plot(seq(start.time:time.steps+1), avena_r , type="l")
+plot(seq(start.time:time.steps+1), erodium_r , type="l")
+
+plot(seq(start.time:time.steps+1), avena_invader , type="l")
+plot(seq(start.time:time.steps+1), erodium_invader , type="l")
+```
+
