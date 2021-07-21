@@ -8,25 +8,61 @@ Goal is to look at the strength of the storage effect in seedbanking annual (AS)
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+
+## Personal ggplot theme
+theme_cw <- function () { 
+  theme_bw(base_size=12) %+replace% 
+    theme(
+      panel.background = element_blank(), 
+      plot.background = element_blank(), 
+      axis.ticks = element_line(colour = "grey70", size = rel(0.5)),
+      panel.grid.minor = element_blank(), 
+      panel.grid.major.x = element_blank(),
+      legend.background = element_blank(), 
+      legend.key = element_blank(),
+      strip.background = element_blank(), 
+    #  strip.text=element_text(size=12),
+    #  axis.text=element_text(size=12),
+      complete = TRUE
+    )
+}
 ```
 
 ## Parameters and set up
 Setting parameters we're going to use for alpha and lambda under different environmental conditions. Starting with the lambda and alpha parameters for an (as our AN) and as (as our AS) from Hallett et al. 2019 Ecology Letters paper, using the "wet" treatment as our wet environment and the "dry" treatment for our dry environment. Also going to use the seedbank parameters for as listed in that ms, which references Rice 1985, and simplifying the an to being non-seedbanking (so shifting its survival in the seed bank proportion from 0.4 to 0)
 
-*I'm not sure if this parameter set makes the best sense to use, since as has a higher lambda in the ControlDry treatment and an is the other way around -- we want something where they both prefer the same conditions but are affected in different ways?*
-
 ```{r parameters}
-pars <- read.csv('model_parameters_hallett.csv') %>%
-  mutate(species = ifelse(species == 'an', 'an', 'as'),
-         treatment = ifelse(treatment == 'dry','dry','wet')) %>%
-  rename(a.an = a.an, a.as = a.as)
-
 
 # seed survival and germination fractions
+# don't currently differ by environmental conditions but they could
 as <- 0 # changed to 0 to be a fully non-seedbanking species
 ag <- 0.9
 es <- 0.82
 eg <- 0.6
+
+# main parameters
+pars <- read.csv('model_parameters_hallett.csv') %>%
+  mutate(species = ifelse(species == 'Avena', 'an', 'as'), # generalize species names
+         treatment = ifelse(treatment == 'consistentDry','dry','wet')) %>%
+  rename(a.an = aiA, a.as = aiE) %>%
+  select(-X) %>%
+  mutate(seed.surv = ifelse(species == 'an', as, es),
+         seed.germ = ifelse(species == 'an', ag, eg)) # add seed survival and germ columns
+
+# adding average values to the parameter df
+an.means <- pars %>%
+  filter(species == 'an') %>% 
+  select(a.an, a.as, lambda) %>%
+  colMeans()
+as.means <- pars %>%
+  filter(species == 'as') %>% 
+  select(a.an, a.as, lambda) %>%
+  colMeans()
+pars <- pars %>%
+  add_row(treatment = 'average', species = 'an', 
+          a.an = an.means['a.an'], a.as = an.means['a.as'], lambda = an.means['lambda']) %>%
+  add_row(treatment = 'average', species = 'as', 
+          a.an = an.means['a.an'], a.as = an.means['a.as'], lambda = an.means['lambda'])
 ```
 
 Functions for coexistence calculations (currently taken from Hallett et al 2019)
@@ -57,174 +93,262 @@ pop_resident <- function (N0, resident, s, g, a.intra, a.inter, lambda) {
 ## Running models
 Function to run an invasion one way: resident only for init.time.steps, invader added in after that until total.time.steps. Returns a list? with initial resident growth, invader growth, and resident growth -- could also make this as a df/tibble with columns for species, and the invader would just start after a certain time point. 
 ```{r running-invasion}
-run_invasion <- function(sp.invader, sp.resident, N0.i, N0.r, parameters, vary.lambda = TRUE, vary.alpha = TRUE){
+run_invasion <- function(sp.invader, sp.resident, N0.i, N0.r, parameters, vary.lambda = TRUE, vary.alpha = TRUE, init.time.steps = 50, total.time.steps = 100){
   
+  # two equally probable environmental conditions
+  env.draw <- rbinom(total.time.steps, 1, 0.5) 
+  env.cond <- if_else(env.draw > 0, 'wet','dry')
+  
+  n.res <- rep(NA, total.time.steps) # resident population
+  n.res.gr <- rep(NA, total.time.steps) # growth rate of resident population
+  n.inv <- rep(NA, total.time.steps) # invader population, init.time.steps will stay NA
+  
+  a.res <- paste('a',sp.resident, sep = '.') # column name of resident interactions
+  a.inv <- paste('a',sp.invader, sep = '.') # column name of invader interactions
+  
+  # parameters for average environmental condition
+  p.res.ave <- parameters %>% filter(species == sp.resident, treatment == 'average')
+  p.inv.ave <- parameters %>% filter(species == sp.invader, treatment == 'average')
+    
+  # running just the resident alone for init.time.steps
+  n.res[1] <- N0.r
+  for (t in 1:init.time.steps){
+    # parameters for varying environmental condition
+    p.res <- parameters %>% filter(species == sp.resident, treatment == env.cond[t])
+    
+    # running one time step using the appropriate environmental parameters
+    n.res[t+1] <- pop_equilibrium(N0 = n.res[t], 
+                                  s = p.res$seed.surv, 
+                                  g = p.res$seed.germ, 
+                                  lambda = if_else(vary.lambda == TRUE,
+                                                   p.res$lambda, 
+                                                   p.res.ave$lambda), 
+                                  a.intra = if_else(vary.alpha == TRUE,
+                                                    p.res[,a.res],
+                                                    p.res.ave[,a.res]))
+    n.res.gr[t+1] <- n.res[t+1]/n.res[t]
+  }
+  
+  # running the resident and invader for the remaining time steps
+  for (t in (init.time.steps+1):(total.time.steps-1)){
+    p.res <- parameters %>% filter(species == sp.resident, treatment == env.cond[t])
+    p.inv <- parameters %>% filter(species == sp.invader, treatment == env.cond[t])
+    
+    # invader population
+    # N0 of the invader is set to the same value each time
+    n.inv[t+1] <- pop_invade(N0 = N0.i, 
+                             resident = n.res[t], 
+                             s = p.inv$seed.surv, 
+                             g = p.inv$seed.germ, 
+                             lambda = if_else(vary.lambda == TRUE,
+                                              p.inv$lambda, 
+                                              p.inv.ave$lambda), 
+                             a.inter = if_else(vary.alpha == TRUE,
+                                               p.inv[,a.res],
+                                               p.inv.ave[,a.res]))
+    # resident population
+    n.res[t+1] <- pop_resident(N0 = N0.i, 
+                               resident = n.res[t], 
+                               s = p.res$seed.surv, 
+                               g = p.res$seed.germ, 
+                               lambda = if_else(vary.lambda == TRUE,
+                                                p.res$lambda, 
+                                                p.res.ave$lambda), 
+                               a.intra = if_else(vary.alpha == TRUE,
+                                                 p.res[,a.res],
+                                                 p.res.ave[,a.res]),
+                               a.inter = if_else(vary.alpha == TRUE,
+                                                 p.res[,a.inv],
+                                                 p.res.ave[,a.inv]))
+    n.res.gr[t+1] <- n.res[t+1]/n.res[t]
+  }
+
+  return(tibble(time = 1:total.time.steps, env.cond, n.inv, n.res, n.res.gr))
+}
+
+```
+
+Plotting function so we can visualize what's going on with the different types of variation
+```{r plotting-function}
+plot_invasion <- function(df, sp.invader, sp.resident, title){
+  df.long <- df %>% 
+    pivot_longer(cols = c(n.res, n.inv),
+                 names_to = 'species', values_to = 'n') %>% 
+    mutate(n.log = log(n))
+  
+  ## colors for graphs
+  cols <- c(
+    as = "#5445b1",
+    an = "#f3c483",
+    p = "#4DA896",
+    lines = "#749dae"
+  )
+  
+  sp.inv.cap <- toupper(sp.invader)
+  sp.res.cap <- toupper(sp.resident)
+  
+  ggplot(df.long, aes(x = time, y = n.log, color = species)) +
+    geom_line() +
+    geom_vline(xintercept = time.warm.up, color = cols[['lines']], linetype = 'dashed') +
+    theme_cw() +
+    scale_color_manual(name = 'Species', values = c(cols[[sp.invader]], cols[[sp.resident]]),
+                       labels = c(sp.inv.cap,sp.res.cap)) +
+    ggtitle(paste(title, sp.inv.cap, 'invades', sp.res.cap, sep = ' ')) +
+    xlab('Time') + 
+    ylab('Population size (log)')
+  
+}
+```
+
+# Calculating partitions
+Function to calculate partitions for a given invader and resident
+```{r partition-function}
+partition_epsilons <- function(sp.inv, sp.res){
+  
+  part <- tibble(sp.invader = sp.inv, sp.resident = sp.res)
+  
+  # no variation
+  invade.none <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
+                               N0.i = 1, N0.r = 100, parameters = pars,
+                               init.time.steps = time.warm.up, total.time.steps = time.full,
+                               vary.lambda = FALSE, vary.alpha = FALSE) %>%
+    filter(time > time.warm.up + 1)
+  
+  part$inv.e0 <- log(mean(invade.none$n.inv))
+  part$res.e0 <- log(mean(invade.none$n.res.gr))
+  
+  # lambda variation only
+  invade.l <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
+                            N0.i = 1, N0.r = 100, parameters = pars,
+                            init.time.steps = time.warm.up, total.time.steps = time.full,
+                            vary.lambda = TRUE, vary.alpha = FALSE) %>%
+    filter(time > time.warm.up + 1)
+  
+  part$inv.el <- log(mean(invade.l$n.inv)) - part$inv.e0
+  part$res.el <- log(mean(invade.l$n.res.gr))- part$inv.e0
+  
+  # alpha variation only
+  invade.a <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
+                            N0.i = 1, N0.r = 100, parameters = pars,
+                            init.time.steps = time.warm.up, total.time.steps = time.full,
+                            vary.lambda = FALSE, vary.alpha = TRUE) %>%
+    filter(time > time.warm.up + 1)
+  
+  part$inv.ea <- log(mean(invade.a$n.inv)) - part$inv.e0
+  part$res.ea <- log(mean(invade.a$n.res.gr)) - part$inv.e0
+  
+  # full variation
+  invade.full <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
+                               N0.i = 1, N0.r = 100, parameters = pars,
+                               init.time.steps = time.warm.up, total.time.steps = time.full) %>%
+    filter(time > time.warm.up + 1)
+  
+  part$inv.full <- log(mean(invade.full$n.inv)) 
+  part$res.full <- log(mean(invade.full$n.res.gr))
+  part$inv.eint <- part$inv.full - (part$inv.e0 + part$inv.el + part$inv.ea)
+  part$res.eint <- part$res.full - (part$res.e0 + part$res.el + part$res.ea)
+  
+  return(part)
 }
 
 
 ```
 
+Running that partition function
+```{r partition-run}
+time.warm.up <- 50
+time.full <- 100
 
+partitions <- partition_epsilons('an','as') %>%
+  rbind(partition_epsilons('as','an')) %>%
+  pivot_longer(cols = inv.e0:res.eint) %>%
+  separate(name, into = c('player', 'partition')) %>%
+  pivot_wider(names_from = player, values_from = value) %>%
+  mutate(delta = inv - res,
+         partition = factor(partition, 
+                            levels = c('full','e0','ea','el','eint')))
 
-Running AN to equilibrium. Just using a starting population of 100 for both AN and AS
-```{r an-eq}
-N0 <- 100
-time.steps <- 100
-env.draw <- rbinom(time.steps, 1, 0.5)
-env.cond <- if_else(env.draw > 0, 'wet','dry')
-n.an <- rep(NA, time.steps)
-n.an[1] <- N0
-
-for (t in 1:time.steps) {
-  params <- pars %>% filter(species=='an', treatment==env.cond[t])
-  n.an[t+1] <- pop.equilibrium(N0=n.an[t], s=as, g=ag, a.intra=params$a.an, lambda=params$lambda)
-}
-
-# check output
-plot(seq(1:(time.steps+1)), n.an, type="l")
-```
-
-Running AS to equilibrium on the same time series
-```{r as-eq}
-N0 <- 100
-n.as <- rep(NA, time.steps)
-n.as[1] <- N0
-
-for (t in 1:time.steps) {
-  params <- pars %>% filter(species=='as', treatment==env.cond[t])
-  n.as[t+1] <- pop.equilibrium(N0=n.as[t], s=es, g=eg, a.intra=params$a.as, lambda=params$lambda)
-}
-
-# check output
-plot(seq(1:(time.steps+1)), n.as, type="l")
-```
-
-
-Invading AN into AS 
-```{r an-invade}
-# invade an first
-start.time <- 50
-an.invade <- rep (NA, time.steps - start.time)
-as.resident <- rep (NA, time.steps - start.time)
-temp <- 1
-for (t in start.time:time.steps) {
-  params <- pars %>% filter(species=='an', treatment==env.cond[t])
-  params.resident <- pars %>% filter(species=='as', treatment==env.cond[t])
-  an.invade[temp] <- pop.invade(N0=1, resident=n.as[t], s=as, g=ag, a.inter=params$a.as, lambda=params$lambda)
-  
-  # sanity check that the resident isn't affected
-  as.new <- pop.resident(N0=1, resident=n.as[t], s=es, g=eg, 
-                              a.intra=params.resident$a.as, a.inter=params.resident$a.an, 
-                              lambda=params.resident$lambda)
-  as.resident[temp] <- as.new/n.as[t]
-  
-  temp  <- temp + 1 
-}
-```
-
-Invading AS into AN
-```{r as-invade}
-as.invade <- rep (NA, time.steps - start.time)
-an.resident <- rep (NA, time.steps - start.time)
-temp <- 1
-for (t in start.time:time.steps) {
-  params <- pars %>% filter(species=='as', treatment==env.cond[t])
-  params.resident <- pars %>% filter(species=='an', treatment==env.cond[t])
-  
-  as.invade[temp] <- pop.invade(N0=1, resident=n.an[t], s=es, g=eg, a.inter=params$a.an, lambda=params$lambda)
-  
-  # sanity check that the resident isn't affected
-  an.new <- pop.resident(N0=1, resident=n.an[t], s=as, g=ag, 
-                            a.intra=params.resident$a.an, a.inter=params.resident$a.as, 
-                            lambda=params.resident$lambda)
-  an.resident[temp] <- an.new/n.an[t]
-  temp  <- temp + 1 
-}
+ggplot(partitions, aes(x = partition, y = delta)) + 
+  facet_grid(cols = vars(sp.invader)) + 
+  geom_bar(stat = 'identity', position = position_dodge()) +
+  theme_cw()
 
 ```
 
-Taking the log of these data frames, plotting to check output
-```{r inv-res-log}
-an.invader <- log(an.invade)
-as.invader <- log(as.invade)
 
-an.r <- log(an.resident)
-as.r <- log(as.resident)
+# Running and plotting invasions
 
-plot(seq(start.time:time.steps+1), an.r , type="l")
-plot(seq(start.time:time.steps+1), as.r , type="l")
+Full variation (normal run)
+```{r normal-run}
+time.warm.up <- 50
+time.full <- 100
+invade.an.full <-  run_invasion(sp.invader = 'an', sp.resident = 'as',
+                                N0.i = 1, N0.r = 100, parameters = pars,
+                                init.time.steps = time.warm.up, total.time.steps = time.full)
 
-plot(seq(start.time:time.steps+1), an.invader , type="l")
-plot(seq(start.time:time.steps+1), as.invader , type="l")
+plot_invasion(invade.an.full, 'an', 'as', 'Full variation')
+
+
+invade.as.full <-  run_invasion(sp.invader = 'as', sp.resident = 'an',
+                                N0.i = 1, N0.r = 100, parameters = pars,
+                                init.time.steps = time.warm.up, total.time.steps = time.full)
+
+plot_invasion(invade.as.full, 'as', 'an', 'Full variation')
+
 ```
 
-# Partitioning
 No variation
 ```{r no-variation}
-an.means <- pars %>%
-  filter(species == 'an') %>% 
-  select(a.an, a.as, lambda) %>%
-  colMeans()
-as.means <- pars %>%
-  filter(species == 'as') %>% 
-  select(a.an, a.as, lambda) %>%
-  colMeans()
-pars <- pars %>% select(-X) %>%
-  add_row(treatment = 'average', species = 'an', 
-          a.an = an.means['a.an'], a.as = an.means['a.as'], lambda = an.means['lambda']) %>%
-  add_row(treatment = 'average', species = 'as', 
-          a.an = an.means['a.an'], a.as = an.means['a.as'], lambda = an.means['lambda'])
+invade.an.none <-  run_invasion(sp.invader = 'an', sp.resident = 'as',
+                           N0.i = 1, N0.r = 100, parameters = pars,
+                           init.time.steps = time.warm.up, total.time.steps = time.full,
+                           vary.lambda = FALSE, vary.alpha = FALSE)
 
-N0 <- 100
+plot_invasion(invade.an.none, 'an', 'as', 'No variation')
 
-an.no.var <- rep(NA, time.steps)
-an.no.var[1] <- N0
-for (t in 1:time.steps) {
-  an.no.var[t+1] <- pop.equilibrium(N0=an.no.var[t], s=as, g=ag, 
-                                       a.intra=a.intra.weighted, lambda=a.lambda.weighted)
-}
+invade.as.none <-  run_invasion(sp.invader = 'as', sp.resident = 'an',
+                           N0.i = 1, N0.r = 100, parameters = pars,
+                           init.time.steps = time.warm.up, total.time.steps = time.full,
+                           vary.lambda = FALSE, vary.alpha = FALSE)
 
-# check output
-plot(seq(1:(time+1)), an.no.var, type="l")
-
-
-# for as
-N0 <- 100
-as.no.var <- rep(NA, time)
-as.no.var[1] <- N0
-
-for (t in 1:time) {
-  as.no.var[t+1] <- pop.equilibrium(N0=as.no.var[t], s=es, g=eg, a.intra=e.intra.weighted, 
-                                         lambda=e.lambda.weighted)
-}
-
-# check output
-plot(seq(1:(time+1)), as.no.var, type="l")
-
-# now invade each species into the resident
-an.invade.no.var <- pop.invade(N0=1, resident=as.no.var[time], s=as, g=ag, 
-                                  a.inter=a.inter.weighted, lambda=a.lambda.weighted)
-
-as.invade.no.var <- pop.invade(N0=1, resident=an.no.var[time], s=es, g=eg, 
-                                    a.inter=e.inter.weighted, lambda=e.lambda.weighted)
-
-# determine any changes in the residents' abundances
-an.resident.no.var.next <- pop.resident(N0=1, resident=an.no.var[time], s=as, g=ag, 
-                                      a.intra = a.intra.weighted,
-                                      a.inter=a.inter.weighted, lambda=a.lambda.weighted)
-
-an.resident.no.var <- an.no.var[time]/an.resident.no.var.next
-
-# as
-as.resident.no.var.next <- pop.resident(N0=1, resident=as.no.var[time], s=es, g=eg, 
-                                           a.intra = e.intra.weighted,
-                                           a.inter=e.inter.weighted, lambda=e.lambda.weighted)
-
-as.resident.no.var <- as.no.var[time]/as.resident.no.var.next
-
-an.epsilon.0 <- log(an.invade.no.var)
-as.epsilon.0 <- log(as.invade.no.var)
-resident.an.epsilon.0 <- log(an.resident.no.var)
-resident.as.epsilon.0 <- log(as.resident.no.var)
+plot_invasion(invade.as.none, 'as', 'an', 'No variation')
 ```
+
+Lambda only
+```{r lambda-variation}
+invade.an.l <-  run_invasion(sp.invader = 'an', sp.resident = 'as',
+                           N0.i = 1, N0.r = 100, parameters = pars,
+                           init.time.steps = time.warm.up, total.time.steps = time.full,
+                           vary.lambda = TRUE, vary.alpha = FALSE)
+
+plot_invasion(invade.an.l, 'an', 'as', 'Lambda variation')
+
+
+invade.as.l <-  run_invasion(sp.invader = 'as', sp.resident = 'an',
+                           N0.i = 1, N0.r = 100, parameters = pars,
+                           init.time.steps = time.warm.up, total.time.steps = time.full,
+                           vary.lambda = TRUE, vary.alpha = FALSE)
+
+plot_invasion(invade.as.l, 'as', 'an', 'Lambda')
+
+```
+
+Alpha only
+```{r lambda-variation}
+invade.an.a <-  run_invasion(sp.invader = 'an', sp.resident = 'as',
+                           N0.i = 1, N0.r = 100, parameters = pars,
+                           init.time.steps = time.warm.up, total.time.steps = time.full,
+                           vary.lambda = FALSE, vary.alpha = TRUE)
+
+plot_invasion(invade.an.a, 'an', 'as', 'Alpha variation')
+
+invade.as.a <-  run_invasion(sp.invader = 'as', sp.resident = 'an',
+                           N0.i = 1, N0.r = 100, parameters = pars,
+                           init.time.steps = time.warm.up, total.time.steps = time.full,
+                           vary.lambda = FALSE, vary.alpha = TRUE)
+
+plot_invasion(invade.as.a, 'as', 'an', 'Alpha variation')
+
+```
+
 
