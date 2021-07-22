@@ -382,11 +382,25 @@ partitions <- partition_epsilons('an','as') %>%
   mutate(delta = inv - res,
          partition = factor(partition, 
                             levels = c('full','e0','ea','el','eint', 'storage','nocov')))
+species_names <- c(
+  an = 'AN invades AS',
+  as = 'AS invades AN'
+)
 
-ggplot(partitions, aes(x = partition, y = delta)) + 
-  facet_grid(cols = vars(sp.invader)) + 
+colors <- c("#5445b1", "#749dae", "#f3c483", "#5c1a33", "#cd3341", "#f7dc6a", "#4DA896")
+
+ggplot(partitions, aes(x = partition, y = delta, fill = partition)) + 
+  facet_grid(cols = vars(sp.invader),
+             labeller = labeller(sp.invader = species_names)) + 
   geom_bar(stat = 'identity', position = position_dodge()) +
-  theme_cw()
+  theme_cw() +
+  ylab('Partitioning of growth rate when rare') +
+  scale_x_discrete(labels = c('full' = 'Full',  'e0' = expression(Delta^0), 'ea' = expression(Delta^alpha),
+                              'el' = expression(Delta^lambda), 'eint' = expression(Delta^{alpha*lambda}),
+                              'storage' = expression(Delta^(alpha*lambda)), 'nocov' = expression(Delta^{alpha!=lambda})),
+                   name = 'Partition') +
+  scale_fill_manual(values = colors) +
+  guides(fill = 'none')
 
 ```
 
