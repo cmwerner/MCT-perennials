@@ -1,0 +1,190 @@
+---
+title: "partitioning_P_AN_new"
+output: html_document
+---
+---
+title: "Partitioning perennial - nonseedbank annual"
+output: html_document
+---
+
+Goal is to look at the strength of the storage effect in perennial (P) and nonseedbanking annual (AN) species interactions. We want to measure how the storage effect [and the relative strength of storage effect:relative nonlinearity] changes with 1. magnitude of envrionmental variation 2. autocorrelation of environmental variation
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+
+## Personal ggplot theme
+theme_cw <- function () { 
+  theme_bw(base_size=12) %+replace% 
+    theme(
+      panel.background = element_blank(), 
+      plot.background = element_blank(), 
+      axis.ticks = element_line(colour = "grey70", size = rel(0.5)),
+      panel.grid.minor = element_blank(), 
+      panel.grid.major.x = element_blank(),
+      legend.background = element_blank(), 
+      legend.key = element_blank(),
+      strip.background = element_blank(), 
+    #  strip.text=element_text(size=12),
+    #  axis.text=element_text(size=12),
+      complete = TRUE
+    )
+}
+```
+
+## Parameters and set up
+Setting parameters we're going to use for alpha and lambda under different environmental conditions. 
+
+```{r parameters}
+# main parameters
+pars <- read.csv('model_parameters_perennials.csv') %>%
+  mutate(seed.surv = NULL)
+
+# adding average values to the parameter df
+an.means <- pars %>%
+  filter(species == 'an') %>% 
+  select(a.an, a.s, a.p, lambda, seed.germ) %>%
+  colMeans()
+s.means <- pars %>%
+  filter(species == 's') %>% 
+  select(a.an, a.s, a.p, seed.germ, stem.surv) %>%
+  colMeans()
+p.means <- pars %>%
+  filter(species == 'p') %>%
+  select(a.an, a.s, a.p, lambda, stem.surv) %>%
+  colMeans()
+
+pars <- pars %>%
+  add_row(treatment = 'average', species = 'an', 
+          a.an = an.means['a.an'], a.s = an.means['a.s'], a.p = an.means['a.p'],
+          lambda = an.means['lambda'], seed.germ = an.means['seed.germ'], 
+          stem.surv = NA) %>%
+  add_row(treatment = 'average', species = 's', 
+          a.an = s.means['a.an'], a.s = s.means['a.s'], a.p = s.means['a.p'],
+          lambda = NA, seed.germ = s.means['seed.germ'], 
+          stem.surv = s.means['stem.surv']) %>%
+  add_row(treatment = 'average', species = 'p', 
+          a.an = p.means['a.an'], a.s = p.means['a.s'], a.p = p.means['a.p'],
+          lambda = p.means['lambda'], seed.germ = NA, 
+          stem.surv = p.means['stem.surv'])
+
+```
+
+Functions for one step of species interaction calculations. Trying to make it general to whether it's both species present or just one--if it's one, that population is just at 0. Takes in the full parameter df for all the species (just for one environmental condition though) and a list of species population sizes. If it's just one species running to equilibrium then it's N0 will be 0. *Goal for making this more modular would be to have an analog of this function for the annual-seedbanking species*
+```{r species-interactions}
+pop_interactions <- function(N0, param){
+  pars.s <- param %>% filter(species == 's')
+  pars.p <- param %>% filter(species == 'p')
+  pars.an <- param %>% filter(species == 'an')
+  
+  n.s <- N0$p*pars.p$lambda /
+    (1 + pars.p$a.an * pars.an$seed.germ * N0$an +
+       pars.p$a.s * pars.s$seed.germ * N0$s +
+       pars.p$a.p * N0$p)
+  
+  n.p <- N0$p * pars.p$stem.surv +
+    (N0$s * pars.s$seed.germ * pars.s$stem.surv) /
+    (1 + pars.s$a.an * pars.an$seed.germ * N0$an +
+       pars.s$a.s * pars.s$seed.germ * N0$s +
+       pars.s$a.p * N0$p)
+  
+  n.an <- N0$an*pars.an$lambda /
+    (1+ pars.an$a.an * pars.an$seed.germ * N0$an +
+       pars.an$a.s * pars.s$seed.germ * N0$s +
+       pars.an$a.p * N0$p)
+  
+  n.all <- tibble(an = n.an,
+                  s = n.s,
+            p = n.p)
+  return(n.all)
+}
+
+```
+
+## Running models
+
+Not sure if we can use the same function to run an invasion as before or not. It would be nice to set this up to work somehow, but it may need to reworked to be about the perennial vs the annual rather than the resident vs invader, and just use their ids to determine what the populations should be? 
+
+Idea is that sp.invader and sp.resident parameters can be either a single value (ex: 'a') or multiple values (ex: c('s','p'))
+```{r running-invasion}
+run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, 
+                         vary.lambda = TRUE, vary.alpha = TRUE, 
+                         init.time.steps = 50, total.time.steps = 100) {
+  
+  # two equally probable environmental conditions
+  env.draw <- rbinom(total.time.steps, 1, 0.5) 
+  env.cond <- if_else(env.draw > 0, 'wet','dry')
+  
+  # populations with resident species impacted by the invader
+  n.res.impact <- tibble(an = as.numeric(rep(NA, total.time.steps)),
+                       s = as.numeric(rep(NA, total.time.steps)),
+                       p = as.numeric(rep(NA, total.time.steps)))
+  
+  # populations with resident species not impacted by the invader
+  n.all <- tibble(an = as.numeric(rep(NA, total.time.steps)),
+                       s = as.numeric(rep(NA, total.time.steps)),
+                       p = as.numeric(rep(NA, total.time.steps)))
+  
+  # setting initial populations
+  n.all[1,sp.resident] <- N0.r
+  n.all[1,sp.invader] <- 0
+  n.res.impact[1,sp.resident] <- N0.r
+  n.res.impact[1,sp.invader] <- 0
+  
+  # parameters for the average env condition
+  p.ave <- parameters %>% filter(treatment == 'average')
+  for(t in 1:init.time.steps){
+    # parameters for the varying env condition
+    p.env <- parameters %>% filter(treatment == env.cond[t])
+    
+    # setting non-varying parameters to their average
+    if(vary.lambda == FALSE){
+      p.env$lambda <- p.ave$lambda
+    }
+    
+    #NOTE: still need to do this for alphas--mutate with an across() function?
+    
+    # running one time step with the appropriate environmental parameters
+    n.all[t+1,] <- pop_interactions(N0 = n.all[t,], param = p.env)
+    n.res.impact[t+1,] <- n.all[t+1,]
+    
+  }
+  
+  # running the resident and invader for the remaining time steps
+  # NOTE: not worrying about resetting the resident for each time step here yet, 
+  # just allowing it to have an impact to get a framework in
+  for (t in (init.time.steps+1):(total.time.steps-1)){
+    # parameters for the varying env condition
+    p.env <- parameters %>% filter(treatment == env.cond[t])
+    
+    # setting non-varying parameters to their average
+    if(vary.lambda == FALSE){
+      p.env$lambda <- p.ave$lambda
+    }
+    
+    #NOTE: still need to do this for alphas--mutate with an across() function?
+    
+    N0.set <- n.all[t,]
+    N0.set[sp.invader] <- 1/length(sp.invader) # NOTE: change this later to reflect equilibrium proportion?
+    # running one time step with the appropriate environmental parameters
+    n.all[t+1,] <- pop_interactions(N0 = N0.set, param = p.env)
+    
+  }
+  
+  return(n.all)
+  
+}
+
+```
+
+Testing functions
+```{r testing}
+
+test.run <- run_invasion(sp.invader = c('s','p'), sp.resident = 'an', N0.r = 100, 
+                         parameters = pars, 
+                         vary.lambda = TRUE, vary.alpha = TRUE, 
+                         init.time.steps = 50, total.time.steps = 100)
+
+```
+
+*Need to modify output and/or plotting and partitioning functions so they match up*

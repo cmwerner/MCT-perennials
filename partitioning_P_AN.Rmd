@@ -1,9 +1,9 @@
 ---
-title: "Partitioning seedbank annual - nonseedbank annual"
+title: "Partitioning perennial - nonseedbank annual"
 output: html_document
 ---
 
-Goal is to look at the strength of the storage effect in seedbanking annual (AS) and nonseedbanking annual (AN) species interactions. We want to measure how the storage effect [and the relative strength of storage effect:relative nonlinearity] changes with 1. magnitude of envrionmental variation 2. autocorrelation of environmental variation
+Goal is to look at the strength of the storage effect in perennial (P) and nonseedbanking annual (AN) species interactions. We want to measure how the storage effect [and the relative strength of storage effect:relative nonlinearity] changes with 1. magnitude of envrionmental variation 2. autocorrelation of environmental variation
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -29,52 +29,64 @@ theme_cw <- function () {
 ```
 
 ## Parameters and set up
-Setting parameters we're going to use for alpha and lambda under different environmental conditions. Starting with the lambda and alpha parameters for an (as our AN) and as (as our AS) from Hallett et al. 2019 Ecology Letters paper, using the "wet" treatment as our wet environment and the "dry" treatment for our dry environment. Also going to use the seedbank parameters for as listed in that ms, which references Rice 1985, and simplifying the an to being non-seedbanking (so shifting its survival in the seed bank proportion from 0.4 to 0)
+Setting parameters we're going to use for alpha and lambda under different environmental conditions. 
 
 ```{r parameters}
-
-# seed survival and germination fractions
-# don't currently differ by environmental conditions but they could
-as <- 0 # changed to 0 to be a fully non-seedbanking species
-ag <- 0.9
-es <- 0.82
-eg <- 0.6
-
 # main parameters
-pars <- read.csv('model_parameters_hallett.csv') %>%
-  mutate(species = ifelse(species == 'Avena', 'an', 'as'), # generalize species names
-         treatment = ifelse(treatment == 'consistentDry','dry','wet')) %>%
-  rename(a.an = aiA, a.as = aiE) %>%
-  select(-X) %>%
-  mutate(seed.surv = ifelse(species == 'an', as, es),
-         seed.germ = ifelse(species == 'an', ag, eg)) # add seed survival and germ columns
+pars <- read.csv('model_parameters_perennials.csv') %>%
+  mutate(seed.surv = NULL)
 
 # adding average values to the parameter df
 an.means <- pars %>%
   filter(species == 'an') %>% 
-  select(a.an, a.as, lambda, seed.surv, seed.germ) %>%
+  select(a.an, a.s, a.p, lambda, seed.germ) %>%
   colMeans()
-as.means <- pars %>%
-  filter(species == 'as') %>% 
-  select(a.an, a.as, lambda, seed.surv, seed.germ) %>%
+s.means <- pars %>%
+  filter(species == 's') %>% 
+  select(a.an, a.s, a.p, seed.germ, stem.surv) %>%
   colMeans()
+p.means <- pars %>%
+  filter(species == 'p') %>%
+  select(a.an, a.s, a.p, lambda, stem.surv) %>%
+  colMeans()
+
 pars <- pars %>%
   add_row(treatment = 'average', species = 'an', 
-          a.an = an.means['a.an'], a.as = an.means['a.as'], lambda = an.means['lambda'],
-          seed.surv = an.means['seed.surv'], seed.germ = an.means['seed.germ']) %>%
-  add_row(treatment = 'average', species = 'as', 
-          a.an = as.means['a.an'], a.as = as.means['a.as'], lambda = as.means['lambda'],
-          seed.surv = as.means['seed.surv'], seed.germ = as.means['seed.germ'])
+          a.an = an.means['a.an'], a.s = an.means['a.s'], a.p = an.means['a.p'],
+          lambda = an.means['lambda'], seed.germ = an.means['seed.germ'], 
+          stem.surv = NA) %>%
+  add_row(treatment = 'average', species = 's', 
+          a.an = s.means['a.an'], a.s = s.means['a.s'], a.p = s.means['a.p'],
+          lambda = NA, seed.germ = s.means['seed.germ'], 
+          stem.surv = s.means['stem.surv']) %>%
+  add_row(treatment = 'average', species = 'p', 
+          a.an = p.means['a.an'], a.s = p.means['a.s'], a.p = p.means['a.p'],
+          lambda = p.means['lambda'], seed.germ = NA, 
+          stem.surv = p.means['stem.surv'])
+
 ```
 
-Functions for coexistence calculations (currently taken from Hallett et al 2019)
-
+Functions for coexistence calculations. These are currently just for annual species and will need to change quite a bit--probably won't be able to just be general to resident/invaders but specific to which species is which?
 ```{r functions-coexistence}
 # Determine equilibrium conditions for each species in isolation 
-pop_equilibrium <- function (N0, s, g, a.intra, lambda) {
+pop_equilibrium_annual <- function (N0, s, g, a.intra, lambda) {
   # to run for only a single timestep
   N <- s*(1-g)*N0 + N0*(lambda*g)/(1+a.intra*N0)
   return(N)
+}
+
+pop_equilibrium_perennial <- function (N0.s, N0.p, param) {
+  # to run for only a single timestep
+  pars.s <- param %>% filter(species == 's')
+  pars.p <- param %>% filter(species == 'p')
+  
+  n.s <- N0.p*pars.p$lambda/(1 + pars.p$a.p*N0.p +
+                               pars.p$a.s*pars.s$seed.germ*N0.s)
+  
+  n.p <- N0.p*pars.p$stem.surv +
+    (N0.s*pars.s$seed.germ*pars.s$stem.surv)/
+    (1 + pars.s$a)
+  
 }
 
 # invader population growth rate one time step forward
@@ -185,6 +197,18 @@ run_invasion <- function(sp.invader, sp.resident, N0.i, N0.r, parameters, vary.l
 ```
 
 Additional function for partitioning the storage effect, using temporal randomization to remove correlations. Not entirely sure I'm doing this correctly but we're just going to go for it. Could include it in the function above but that would add a lot of nested if_else statements and I think this might be simpler--also easier to adjust based on feedback. 
+
+*Question: should invader lambda and resident lambda stay correlated, ditto invader alpha and resident alpha? Or fully drop the covariance between all four of those? Currently trying the former*
+
+*In the Ellner ForcedChemo_Func_Covar.R code, "exact sharping" uses all possible combinations of the two conditions (E = temp, C = resource) generated with the "expand.grid" function. And yes it looks like both species are run on the same temp and resource conditions for each step? r1 is for one species and r2 is for the other species, and V1/V2 is the lambda function. D is the dilution (outflow) rate--which is maybe equivalent to a death rate. But I'm not sure what K1 and K2 are--a function of the temperature, not of the resource--not the same as Q which is plotted in the paper. The ms says that K of each species is the "half-saturation constant" and is modeled as a constant but the code looks like it is a function of temperature? These r_j functions are (I think) not based on the density of either species? WHICH maybe makes sense because this isn't a partition involving competition*
+
+*Okay, so first they do these simulations--one set with temp and R variation and one with no variation. minus1 is species1 is the invader species 2 is the resident, minus1$x1 is species1 in this setup. Resident effects on the invader are indirect, via the resident effects on the resource which are used to generate this time series. The only thing that changes between the full variation simulation and the no-variation simulation is parms2$a which goes from 6 to 0--this is the parameter that sets the amplitude of the temperature variations. Resource variation is driven by temperature variation effects on the resident species and its consequent resource uptake rather than set directly.*
+
+*Something else to think about is the $\epsilon_1^{0}$ versus $\epsilon_1^{star}$ as the different base growth rates. I think we (and the Hallett 2019 paper) are using $\epsilon_1^{star}$, the completely fluctuation-independent growth rate. But Ellner has that as a part of $\epsilon_1^{0}$ which is what they then subtract out from the other terms --see the text below eqn 13*
+
+*Also why do they use Esharp for calculating delta1.sigmaE (and ditto for Csharp/sigmaC) instead of just E and C the original time series. Did some quick calculations and it looks like it doesn't change anything--but does that mean that changing time series autocorrelation wouldn't change those components either?*
+
+*Final question is whether the randomization approach we took is equivalent to the sharping or not, since those are based on manipulating the simulation time series after it's been run, not changing things up one step at a time*
 
 ```{r running-no-correlation}
 run_invasion_no_correlation <- function(sp.invader, sp.resident, N0.i, N0.r, parameters, init.time.steps = 50, total.time.steps = 100){
