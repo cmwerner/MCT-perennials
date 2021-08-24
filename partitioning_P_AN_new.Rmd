@@ -25,8 +25,8 @@ theme_cw <- function () {
       legend.background = element_blank(), 
       legend.key = element_blank(),
       strip.background = element_blank(), 
-    #  strip.text=element_text(size=12),
-    #  axis.text=element_text(size=12),
+      #  strip.text=element_text(size=12),
+      #  axis.text=element_text(size=12),
       complete = TRUE
     )
 }
@@ -95,7 +95,7 @@ pop_interactions <- function(N0, param){
   
   n.all <- tibble(an = n.an,
                   s = n.s,
-            p = n.p)
+                  p = n.p)
   return(n.all)
 }
 
@@ -115,21 +115,19 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters,
   env.draw <- rbinom(total.time.steps, 1, 0.5) 
   env.cond <- if_else(env.draw > 0, 'wet','dry')
   
-  # populations with resident species impacted by the invader
-  n.res.impact <- tibble(an = as.numeric(rep(NA, total.time.steps)),
-                       s = as.numeric(rep(NA, total.time.steps)),
-                       p = as.numeric(rep(NA, total.time.steps)))
   
   # populations with resident species not impacted by the invader
+  # NOTE: this isn't generic to any invader and resident species names
   n.all <- tibble(an = as.numeric(rep(NA, total.time.steps)),
-                       s = as.numeric(rep(NA, total.time.steps)),
-                       p = as.numeric(rep(NA, total.time.steps)))
+                  s = as.numeric(rep(NA, total.time.steps)),
+                  p = as.numeric(rep(NA, total.time.steps)))
   
   # setting initial populations
   n.all[1,sp.resident] <- N0.r
   n.all[1,sp.invader] <- 0
-  n.res.impact[1,sp.resident] <- N0.r
-  n.res.impact[1,sp.invader] <- 0
+  
+  # name of column for resident species pop when impacted by invading pop
+  sp.res.impact <- paste(sp.resident, 'impact', sep = '.')
   
   # parameters for the average env condition
   p.ave <- parameters %>% filter(treatment == 'average')
@@ -142,17 +140,18 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters,
       p.env$lambda <- p.ave$lambda
     }
     
-    #NOTE: still need to do this for alphas--mutate with an across() function?
+    # NOTE not sure if this is working yet
+    if(vary.alpha == FALSE){
+      p.env[,sp.resident] <- p.ave[,sp.resident]
+      p.env[,sp.invader] <- p.ave[,sp.invader]
+    }
     
     # running one time step with the appropriate environmental parameters
     n.all[t+1,] <- pop_interactions(N0 = n.all[t,], param = p.env)
-    n.res.impact[t+1,] <- n.all[t+1,]
     
   }
   
   # running the resident and invader for the remaining time steps
-  # NOTE: not worrying about resetting the resident for each time step here yet, 
-  # just allowing it to have an impact to get a framework in
   for (t in (init.time.steps+1):(total.time.steps-1)){
     # parameters for the varying env condition
     p.env <- parameters %>% filter(treatment == env.cond[t])
@@ -162,29 +161,79 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters,
       p.env$lambda <- p.ave$lambda
     }
     
-    #NOTE: still need to do this for alphas--mutate with an across() function?
+    #NOTE: not sure if this is working yet
+    if(vary.alpha == FALSE){
+      p.env[,sp.resident] <- p.ave[,sp.resident]
+      p.env[,sp.invader] <- p.ave[,sp.invader]
+    }
     
-    N0.set <- n.all[t,]
-    N0.set[sp.invader] <- 1/length(sp.invader) # NOTE: change this later to reflect equilibrium proportion?
+    # running invader and resident together
+    N0.together <- n.all[t,]
+    N0.together[sp.invader] <- 1/length(sp.invader) # NOTE: change later to equilibrium proportion?
     # running one time step with the appropriate environmental parameters
-    n.all[t+1,] <- pop_interactions(N0 = N0.set, param = p.env)
+    n.res.impact <- pop_interactions(N0 = N0.together, param = p.env)
     
+    # saving this output as the invader population and the impacted resident population
+    n.all[t+1,sp.invader] <- n.res.impact[sp.invader]
+    n.all[t+1,sp.res.impact] <- n.res.impact[sp.resident]
+    
+    # a version of this with the resident unaffected by the invader
+    N0.res.only <- n.all[t,]
+    N0.res.only[sp.invader] <- 0
+    n.res.only <- pop_interactions(N0 = N0.res.only, param = p.env)
+    n.all[t+1,sp.resident] <- n.res.only[sp.resident]
+      
   }
   
+  n.all$time <- 1:total.time.steps
   return(n.all)
   
 }
 
 ```
 
-Testing functions
-```{r testing}
 
-test.run <- run_invasion(sp.invader = c('s','p'), sp.resident = 'an', N0.r = 100, 
-                         parameters = pars, 
-                         vary.lambda = TRUE, vary.alpha = TRUE, 
-                         init.time.steps = 50, total.time.steps = 100)
+Plotting function so we can visualize what's going on with the different types of variation
+```{r plotting-function}
+plot_invasion <- function(df){
+  df.long <- df %>% 
+    pivot_longer(cols = !time,
+                 names_to = 'species', values_to = 'n',
+                 values_drop_na = TRUE) %>% 
+    mutate(n.log = log(n))
 
+  
+  ggplot(df.long, aes(x = time, y = n.log, color = species)) +
+    geom_line() +
+    theme_cw() +
+    xlab('Time') + 
+    ylab('Population size (log)')
+  
+}
 ```
 
-*Need to modify output and/or plotting and partitioning functions so they match up*
+*NEXT STEP is to get the partition function working (I think it should be nearly compatible with this setup)*
+
+# Running and plotting invasions
+
+Full variation (normal run)
+```{r normal-run}
+time.warm.up <- 50
+time.full <- 100
+invade.per.full <-  run_invasion(sp.invader = c('s','p'), sp.resident = 'an', N0.r = 100, 
+                         parameters = pars, 
+                         vary.lambda = TRUE, vary.alpha = TRUE, 
+                         init.time.steps = time.warm.up, total.time.steps = time.full)
+
+plot_invasion(invade.per.full)
+
+
+
+invade.an.full <-  run_invasion(sp.invader = 'an', sp.resident = c('s','p'), N0.r = 10, 
+                         parameters = pars, 
+                         vary.lambda = TRUE, vary.alpha = TRUE, 
+                         init.time.steps = time.warm.up, total.time.steps = time.full)
+
+plot_invasion(invade.an.full)
+
+```
