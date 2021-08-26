@@ -126,8 +126,12 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters,
   n.all[1,sp.resident] <- N0.r
   n.all[1,sp.invader] <- 0
   
-  # name of column for resident species pop when impacted by invading pop
+  # name of column(s) for resident species pop when impacted by invading pop
   sp.res.impact <- paste(sp.resident, 'impact', sep = '.')
+  # name of column(s) for resident species growth rate
+  sp.res.gr <- paste(sp.resident, 'gr', sep = '.')
+  # name of column(s) for invader species growth rate
+  sp.inv.gr <- paste(sp.invader, 'gr', sep = '.')
   
   # parameters for the average env condition
   p.ave <- parameters %>% filter(treatment == 'average')
@@ -169,7 +173,8 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters,
     
     # running invader and resident together
     N0.together <- n.all[t,]
-    N0.together[sp.invader] <- 1/length(sp.invader) # NOTE: change later to equilibrium proportion?
+    N0.invader <- 1/length(sp.invader) # NOTE: change later to equilibrium proportion?
+    N0.together[sp.invader] <- N0.invader
     # running one time step with the appropriate environmental parameters
     n.res.impact <- pop_interactions(N0 = N0.together, param = p.env)
     
@@ -182,7 +187,13 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters,
     N0.res.only[sp.invader] <- 0
     n.res.only <- pop_interactions(N0 = N0.res.only, param = p.env)
     n.all[t+1,sp.resident] <- n.res.only[sp.resident]
-      
+    
+    # growth rate of the resident
+    n.all[t+1,sp.res.gr] <- n.all[t+1,sp.res.impact]/n.all[t,sp.resident]
+    
+    # growth rate of the invader
+    n.all[t+1,sp.inv.gr] <- n.all[t+1,sp.invader]/N0.invader
+    
   }
   
   n.all$time <- 1:total.time.steps
@@ -195,9 +206,9 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters,
 
 Plotting function so we can visualize what's going on with the different types of variation
 ```{r plotting-function}
-plot_invasion <- function(df){
+plot_invasion <- function(df){ # plots actual population sizes
   df.long <- df %>% 
-    pivot_longer(cols = !time,
+    pivot_longer(cols = !c(time, ends_with('gr')),
                  names_to = 'species', values_to = 'n',
                  values_drop_na = TRUE) %>% 
     mutate(n.log = log(n))
@@ -210,9 +221,24 @@ plot_invasion <- function(df){
     ylab('Population size (log)')
   
 }
+
+plot_gr <- function(df) { # plots population growth rates
+  df.long <- df %>% 
+    pivot_longer(cols = ends_with('gr'),
+                 names_to = 'species', values_to = 'n',
+                 values_drop_na = TRUE) %>% 
+    mutate(n.log = log(n))
+  
+  
+  ggplot(df.long, aes(x = time, y = n.log, color = species)) +
+    geom_line() +
+    theme_cw() +
+    xlab('Time') + 
+    ylab('Growth Rate (log)')
+}
 ```
 
-*NEXT STEP is to get the partition function working (I think it should be nearly compatible with this setup)*
+*NEXT STEP is to get the partition function working--but first to figure out how the growth rates of the perennial seedlings and adults translates to the growth rate of the perennial population as a whole*
 
 # Running and plotting invasions
 
@@ -225,7 +251,8 @@ invade.per.full <-  run_invasion(sp.invader = c('s','p'), sp.resident = 'an', N0
                          vary.lambda = TRUE, vary.alpha = TRUE, 
                          init.time.steps = time.warm.up, total.time.steps = time.full)
 
-plot_invasion(invade.per.full)
+#plot_invasion(invade.per.full)
+plot_gr(invade.per.full)
 
 
 
@@ -234,6 +261,7 @@ invade.an.full <-  run_invasion(sp.invader = 'an', sp.resident = c('s','p'), N0.
                          vary.lambda = TRUE, vary.alpha = TRUE, 
                          init.time.steps = time.warm.up, total.time.steps = time.full)
 
-plot_invasion(invade.an.full)
+#plot_invasion(invade.an.full)
+plot_gr(invade.an.full)
 
 ```
