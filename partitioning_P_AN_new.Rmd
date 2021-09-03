@@ -88,7 +88,7 @@ pop_interactions <- function(N0, param){
        pars.s$a.s * pars.s$seed.germ * N0$s +
        pars.s$a.p * N0$p)
   
-  n.an <- N0$an*pars.an$lambda /
+  n.an <- N0$an * pars.an$seed.germ *pars.an$lambda /
     (1+ pars.an$a.an * pars.an$seed.germ * N0$an +
        pars.an$a.s * pars.s$seed.germ * N0$s +
        pars.an$a.p * N0$p)
@@ -107,13 +107,9 @@ Not sure if we can use the same function to run an invasion as before or not. It
 
 Idea is that sp.invader and sp.resident parameters can be either a single value (ex: 'a') or multiple values (ex: c('s','p'))
 ```{r running-invasion}
-run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, 
+run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
                          vary.lambda = TRUE, vary.alpha = TRUE, 
                          init.time.steps = 50, total.time.steps = 100) {
-  
-  # two equally probable environmental conditions
-  env.draw <- rbinom(total.time.steps, 1, 0.5) 
-  env.cond <- if_else(env.draw > 0, 'wet','dry')
   
   
   # populations with resident species not impacted by the invader
@@ -128,10 +124,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters,
   
   # name of column(s) for resident species pop when impacted by invading pop
   sp.res.impact <- paste(sp.resident, 'impact', sep = '.')
-  # name of column(s) for resident species growth rate
-  sp.res.gr <- paste(sp.resident, 'gr', sep = '.')
-  # name of column(s) for invader species growth rate
-  sp.inv.gr <- paste(sp.invader, 'gr', sep = '.')
+  
   
   # parameters for the average env condition
   p.ave <- parameters %>% filter(treatment == 'average')
@@ -146,14 +139,37 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters,
     
     # NOTE not sure if this is working yet
     if(vary.alpha == FALSE){
-      p.env[,sp.resident] <- p.ave[,sp.resident]
-      p.env[,sp.invader] <- p.ave[,sp.invader]
+      alpha.columns <- c(paste('a', sp.invader, sep = '.'), paste('a', sp.resident, sep = '.'))
+      p.env[,alpha.columns] <- p.ave[,alpha.columns]
     }
     
     # running one time step with the appropriate environmental parameters
     n.all[t+1,] <- pop_interactions(N0 = n.all[t,], param = p.env)
     
   }
+  
+  # figuring out rough invader population distribution if the invader is perennial
+  # using average parameters and resident population size during the final warm-up step
+  # makes it faster for running in for loop
+  if(length(sp.invader) > 1) {
+    n.inv.start <- 1/length(sp.invader)
+    n.old <- n.all[init.time.steps,]
+    n.old[sp.invader] <- n.inv.start
+    n.old.inv <- n.inv.start[1]
+    change <- 1
+    
+    while(change > 0.1){
+      n.update <- pop_interactions(N0 = n.old, param = p.ave)
+      n.per.total <- sum(n.update[sp.invader])
+      n.update[sp.invader] <- n.update[sp.invader]/n.per.total
+      n.update[sp.resident] <- n.old[sp.resident]
+      n.old <- n.update
+      
+      n.new.inv <- n.update[sp.invader]
+      change <- abs(n.old.inv - n.new.inv[1])
+      n.old.inv <- n.new.inv[1]
+    }
+  } 
   
   # running the resident and invader for the remaining time steps
   for (t in (init.time.steps+1):(total.time.steps-1)){
@@ -167,14 +183,34 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters,
     
     #NOTE: not sure if this is working yet
     if(vary.alpha == FALSE){
-      p.env[,sp.resident] <- p.ave[,sp.resident]
-      p.env[,sp.invader] <- p.ave[,sp.invader]
+      alpha.columns <- c(paste('a', sp.invader, sep = '.'), paste('a', sp.resident, sep = '.'))
+      p.env[,alpha.columns] <- p.ave[,alpha.columns]
     }
+    
     
     # running invader and resident together
     N0.together <- n.all[t,]
-    N0.invader <- 1/length(sp.invader) # NOTE: change later to equilibrium proportion?
-    N0.together[sp.invader] <- N0.invader
+    
+    # figuring out starting invader population distribution if the invader is perennial
+    # starting from the n.old found for average conditions above
+    if(length(sp.invader) > 1){
+      change <- 1
+      while(change > 0.01){
+        n.update <- pop_interactions(N0 = n.old, param = p.env)
+        n.per.total <- sum(n.update[sp.invader])
+        n.update[sp.invader] <- n.update[sp.invader]/n.per.total
+        n.update[sp.resident] <- n.old[sp.resident]
+        n.old <- n.update
+        n.new.inv <- n.update[sp.invader]
+        change <- abs(n.old.inv - n.new.inv[1])
+        n.old.inv <- n.new.inv[1]
+      }
+      N0.together[sp.invader] <- n.update[sp.invader] # using the equilibrium stage distribution from above
+    } else {
+      N0.together[sp.invader] <- 1 # if the invader has only one life stage
+    }
+    
+    
     # running one time step with the appropriate environmental parameters
     n.res.impact <- pop_interactions(N0 = N0.together, param = p.env)
     
@@ -189,10 +225,12 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters,
     n.all[t+1,sp.resident] <- n.res.only[sp.resident]
     
     # growth rate of the resident
-    n.all[t+1,sp.res.gr] <- n.all[t+1,sp.res.impact]/n.all[t,sp.resident]
+    sp.res.gr <- paste(paste(sp.resident, collapse = '.'), 'gr', sep = '.') # column name
+    n.all[t+1,sp.res.gr] <- sum(n.all[t+1,sp.res.impact])/sum(n.all[t,sp.resident])
     
     # growth rate of the invader
-    n.all[t+1,sp.inv.gr] <- n.all[t+1,sp.invader]/N0.invader
+    sp.inv.gr <- paste(paste(sp.invader, collapse = '.'), 'gr', sep = '.') # column name
+    n.all[t+1,sp.inv.gr] <- sum(n.all[t+1,sp.invader])
     
   }
   
@@ -246,22 +284,27 @@ Full variation (normal run)
 ```{r normal-run}
 time.warm.up <- 50
 time.full <- 100
+
+# two equally probable environmental conditions
+env.draw <- rbinom(time.full, 1, 0.5) 
+env.condition <- if_else(env.draw > 0, 'wet','dry')
+  
 invade.per.full <-  run_invasion(sp.invader = c('s','p'), sp.resident = 'an', N0.r = 100, 
-                         parameters = pars, 
+                         parameters = pars, env.cond = env.condition,
                          vary.lambda = TRUE, vary.alpha = TRUE, 
                          init.time.steps = time.warm.up, total.time.steps = time.full)
 
-#plot_invasion(invade.per.full)
+plot_invasion(invade.per.full)
 plot_gr(invade.per.full)
 
 
 
 invade.an.full <-  run_invasion(sp.invader = 'an', sp.resident = c('s','p'), N0.r = 10, 
-                         parameters = pars, 
+                         parameters = pars, env.cond = env.condition,
                          vary.lambda = TRUE, vary.alpha = TRUE, 
                          init.time.steps = time.warm.up, total.time.steps = time.full)
 
-#plot_invasion(invade.an.full)
+plot_invasion(invade.an.full)
 plot_gr(invade.an.full)
 
 ```
