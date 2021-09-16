@@ -106,9 +106,11 @@ pop_interactions <- function(N0, param){
 Not sure if we can use the same function to run an invasion as before or not. It would be nice to set this up to work somehow, but it may need to reworked to be about the perennial vs the annual rather than the resident vs invader, and just use their ids to determine what the populations should be? 
 
 Idea is that sp.invader and sp.resident parameters can be either a single value (ex: 'a') or multiple values (ex: c('s','p'))
+
+*For partitions where lambda is set to not vary, also setting germination and survival terms to not vary*
 ```{r running-invasion}
 run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
-                         vary.lambda = TRUE, vary.alpha = TRUE, 
+                         vary.lambda = TRUE, vary.alpha = TRUE, covary = TRUE,
                          init.time.steps = 50, total.time.steps = 100) {
   
   
@@ -128,19 +130,36 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
   
   # parameters for the average env condition
   p.ave <- parameters %>% filter(treatment == 'average')
+  
+  # environmental condition vectors for the no covariance option
+  env.lambda <- sample(env.cond, size = length(env.cond), replace = FALSE)
+  env.alpha <- sample(env.cond, size = length(env.cond), replace = FALSE)
+  
   for(t in 1:init.time.steps){
     # parameters for the varying env condition
     p.env <- parameters %>% filter(treatment == env.cond[t])
     
-    # setting non-varying parameters to their average
+    # adjusting non-varying or non-covarying parameters
+    lambda.columns <- c('lambda','seed.germ','stem.surv') # NOTE would need to change for a generalized function with different parameter columns
+    alpha.columns <- c(paste('a', sp.invader, sep = '.'), 
+                       paste('a', sp.resident, sep = '.'))
+    
+    # constant lambda
     if(vary.lambda == FALSE){
-      p.env$lambda <- p.ave$lambda
+      p.env[,lambda.columns] <- p.ave[,lambda.columns]
     }
     
-    # NOTE not sure if this is working yet
+    # constant alpha
     if(vary.alpha == FALSE){
-      alpha.columns <- c(paste('a', sp.invader, sep = '.'), paste('a', sp.resident, sep = '.'))
       p.env[,alpha.columns] <- p.ave[,alpha.columns]
+    }
+    
+    # parameters for no covariance between alpha and lambda
+    if(covary == FALSE){
+      lambda.env  <- parameters %>% filter(treatment == env.lambda[t])
+      alpha.env <- parameters %>% filter(treatment == env.alpha[t])
+      p.env[,lambda.columns] <- lambda.env[,lambda.columns]
+      p.env[,alpha.columns] <- alpha.env[,alpha.columns]
     }
     
     # running one time step with the appropriate environmental parameters
@@ -176,15 +195,27 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     # parameters for the varying env condition
     p.env <- parameters %>% filter(treatment == env.cond[t])
     
-    # setting non-varying parameters to their average
+   # adjusting non-varying or non-covarying parameters
+    lambda.columns <- c('lambda','seed.germ','stem.surv') # NOTE would need to change for a generalized function with different parameter columns
+    alpha.columns <- c(paste('a', sp.invader, sep = '.'), 
+                       paste('a', sp.resident, sep = '.'))
+    
+    # constant lambda
     if(vary.lambda == FALSE){
-      p.env$lambda <- p.ave$lambda
+      p.env[,lambda.columns] <- p.ave[,lambda.columns]
     }
     
-    #NOTE: not sure if this is working yet
+    # constant alpha
     if(vary.alpha == FALSE){
-      alpha.columns <- c(paste('a', sp.invader, sep = '.'), paste('a', sp.resident, sep = '.'))
       p.env[,alpha.columns] <- p.ave[,alpha.columns]
+    }
+    
+    # parameters for no covariance between alpha and lambda
+    if(covary == FALSE){
+      lambda.env  <- parameters %>% filter(treatment == env.lambda[t])
+      alpha.env <- parameters %>% filter(treatment == env.alpha[t])
+      p.env[,lambda.columns] <- lambda.env[,lambda.columns]
+      p.env[,alpha.columns] <- alpha.env[,alpha.columns]
     }
     
     
@@ -219,17 +250,17 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     n.all[t+1,sp.res.impact] <- n.res.impact[sp.resident]
     
     # a version of this with the resident unaffected by the invader
-    N0.res.only <- n.all[t,]
+    N0.res.only <- n.all[t,] %>% select(all_of(sp.invader), all_of(sp.resident))
     N0.res.only[sp.invader] <- 0
     n.res.only <- pop_interactions(N0 = N0.res.only, param = p.env)
     n.all[t+1,sp.resident] <- n.res.only[sp.resident]
     
     # growth rate of the resident
-    sp.res.gr <- paste(paste(sp.resident, collapse = '.'), 'gr', sep = '.') # column name
+    sp.res.gr <- paste('gr', paste(sp.resident, collapse = '.'), sep = '.') # column name
     n.all[t+1,sp.res.gr] <- sum(n.all[t+1,sp.res.impact])/sum(n.all[t,sp.resident])
     
     # growth rate of the invader
-    sp.inv.gr <- paste(paste(sp.invader, collapse = '.'), 'gr', sep = '.') # column name
+    sp.inv.gr <- paste('gr', paste(sp.invader, collapse = '.'), sep = '.') # column name
     n.all[t+1,sp.inv.gr] <- sum(n.all[t+1,sp.invader])
     
   }
@@ -246,7 +277,7 @@ Plotting function so we can visualize what's going on with the different types o
 ```{r plotting-function}
 plot_invasion <- function(df){ # plots actual population sizes
   df.long <- df %>% 
-    pivot_longer(cols = !c(time, ends_with('gr')),
+    pivot_longer(cols = !c(time, starts_with('gr')),
                  names_to = 'species', values_to = 'n',
                  values_drop_na = TRUE) %>% 
     mutate(n.log = log(n))
@@ -262,7 +293,7 @@ plot_invasion <- function(df){ # plots actual population sizes
 
 plot_gr <- function(df) { # plots population growth rates
   df.long <- df %>% 
-    pivot_longer(cols = ends_with('gr'),
+    pivot_longer(cols = starts_with('gr'),
                  names_to = 'species', values_to = 'n',
                  values_drop_na = TRUE) %>% 
     mutate(n.log = log(n))
@@ -270,20 +301,19 @@ plot_gr <- function(df) { # plots population growth rates
   
   ggplot(df.long, aes(x = time, y = n.log, color = species)) +
     geom_line() +
+    geom_point() +
     theme_cw() +
     xlab('Time') + 
     ylab('Growth Rate (log)')
 }
 ```
 
-*NEXT STEP is to get the partition function working--but first to figure out how the growth rates of the perennial seedlings and adults translates to the growth rate of the perennial population as a whole*
-
 # Running and plotting invasions
 
 Full variation (normal run)
 ```{r normal-run}
-time.warm.up <- 50
-time.full <- 100
+time.warm.up <- 200
+time.full <- 250
 
 # two equally probable environmental conditions
 env.draw <- rbinom(time.full, 1, 0.5) 
@@ -292,6 +322,7 @@ env.condition <- if_else(env.draw > 0, 'wet','dry')
 invade.per.full <-  run_invasion(sp.invader = c('s','p'), sp.resident = 'an', N0.r = 100, 
                          parameters = pars, env.cond = env.condition,
                          vary.lambda = TRUE, vary.alpha = TRUE, 
+                         covary = TRUE,
                          init.time.steps = time.warm.up, total.time.steps = time.full)
 
 plot_invasion(invade.per.full)
@@ -299,12 +330,187 @@ plot_gr(invade.per.full)
 
 
 
-invade.an.full <-  run_invasion(sp.invader = 'an', sp.resident = c('s','p'), N0.r = 10, 
+invade.an.full <-  run_invasion(sp.invader = 'an', sp.resident = c('s','p'), N0.r = 100, 
                          parameters = pars, env.cond = env.condition,
                          vary.lambda = TRUE, vary.alpha = TRUE, 
+                         covary = TRUE,
                          init.time.steps = time.warm.up, total.time.steps = time.full)
 
 plot_invasion(invade.an.full)
 plot_gr(invade.an.full)
+
+```
+
+# Calculating partitions
+Function to calculate partitions for a given invader and resident
+*Could add another small function so we don't have to copy and paste the filter, pivot, mutate, select functions for each step?*
+```{r partition-function}
+partition_epsilons <- function(sp.inv, sp.res){
+  
+  time.warm.up <- 200
+  time.full <- 300
+  
+  # two equally probable environmental conditions
+  env.draw <- rbinom(time.full, 1, 0.5) 
+  env.condition <- if_else(env.draw > 0, 'wet','dry')
+  
+  res.name <- paste(sp.res, collapse = '.')
+  inv.name <- paste(sp.inv, collapse = '.')
+  
+  part <- tibble(sp.invader = inv.name, sp.resident = res.name)
+  
+  # no variation
+  invade.none <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
+                               N0.r = 100, parameters = pars, env.cond = env.condition,
+                               init.time.steps = time.warm.up, total.time.steps = time.full,
+                               vary.lambda = FALSE, vary.alpha = FALSE) %>%
+    filter(time > time.warm.up + 1) %>% 
+    pivot_longer(cols = starts_with('gr'),
+                 names_to = 'species', names_prefix = 'gr.',
+                 values_to = 'growth.rate',
+                 values_drop_na = TRUE) %>% 
+    mutate(gr.log = log(growth.rate))
+  
+  part$inv.e0 <- invade.none %>% 
+    filter(species == inv.name) %>%
+    select(gr.log) %>% colMeans()
+  part$res.e0 <- invade.none %>% 
+    filter(species == res.name) %>%
+    select(gr.log) %>% colMeans()
+  
+  # lambda variation only
+  invade.l <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
+                            N0.r = 100, parameters = pars, env.cond = env.condition,
+                            init.time.steps = time.warm.up, total.time.steps = time.full,
+                            vary.lambda = TRUE, vary.alpha = FALSE) %>%
+    filter(time > time.warm.up + 1) %>% 
+    pivot_longer(cols = starts_with('gr'),
+                 names_to = 'species', names_prefix = 'gr.',
+                 values_to = 'growth.rate',
+                 values_drop_na = TRUE) %>% 
+    mutate(gr.log = log(growth.rate))
+  
+  l.inv.mean <- invade.l %>% 
+    filter(species == inv.name) %>%
+    select(gr.log) %>% colMeans()
+  l.res.mean <- invade.l %>% 
+    filter(species == res.name) %>%
+    select(gr.log) %>% colMeans()
+  
+  part$inv.el <- l.inv.mean - part$inv.e0 
+  part$res.el <- l.res.mean- part$inv.e0
+  
+  # alpha variation only
+  invade.a <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
+                            N0.r = 100, parameters = pars, env.cond = env.condition,
+                            init.time.steps = time.warm.up, total.time.steps = time.full,
+                            vary.lambda = FALSE, vary.alpha = TRUE) %>%
+    filter(time > time.warm.up + 1) %>% 
+    pivot_longer(cols = starts_with('gr'),
+                 names_to = 'species', names_prefix = 'gr.',
+                 values_to = 'growth.rate',
+                 values_drop_na = TRUE) %>% 
+    mutate(gr.log = log(growth.rate))
+  
+  a.inv.mean <- invade.a %>% 
+    filter(species == inv.name) %>%
+    select(gr.log) %>% colMeans()
+  a.res.mean <- invade.a %>% 
+    filter(species == res.name) %>%
+    select(gr.log) %>% colMeans()
+  
+  part$inv.ea <- a.inv.mean - part$inv.e0 
+  part$res.ea <- a.res.mean- part$inv.e0
+  
+  # full variation
+  invade.full <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
+                               N0.r = 100, parameters = pars, env.cond = env.condition,
+                               init.time.steps = time.warm.up, total.time.steps = time.full,
+                               vary.lambda = TRUE, vary.alpha = TRUE) %>%
+    filter(time > time.warm.up + 1) %>% 
+    pivot_longer(cols = starts_with('gr'),
+                 names_to = 'species', names_prefix = 'gr.',
+                 values_to = 'growth.rate',
+                 values_drop_na = TRUE) %>% 
+    mutate(gr.log = log(growth.rate))
+  
+  part$inv.full <- invade.full %>% 
+    filter(species == inv.name) %>%
+    select(gr.log) %>% colMeans()
+  part$res.full <- invade.full %>% 
+    filter(species == res.name) %>%
+    select(gr.log) %>% colMeans()
+  
+  part$inv.eint <- part$inv.full - (part$inv.e0 + part$inv.el + part$inv.ea)
+  part$res.eint <- part$res.full - (part$res.e0 + part$res.el + part$res.ea)
+  
+  # # no correlation
+   invade.nocov <- run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
+                               N0.r = 100, parameters = pars, env.cond = env.condition,
+                               init.time.steps = time.warm.up, total.time.steps = time.full,
+                               vary.lambda = TRUE, vary.alpha = TRUE,
+                               covary = FALSE) %>%
+    filter(time > time.warm.up + 1) %>% 
+    pivot_longer(cols = starts_with('gr'),
+                 names_to = 'species', names_prefix = 'gr.',
+                 values_to = 'growth.rate',
+                 values_drop_na = TRUE) %>% 
+    mutate(gr.log = log(growth.rate))
+   
+   part$inv.nocov <- invade.nocov %>% 
+    filter(species == inv.name) %>%
+    select(gr.log) %>% colMeans()
+   part$res.nocov <- invade.nocov %>% 
+    filter(species == res.name) %>%
+    select(gr.log) %>% colMeans()
+  
+   part$inv.storage <- part$inv.eint - part$inv.nocov
+   part$res.storage <- part$res.eint - part$res.nocov
+  
+  return(part)
+}
+
+
+```
+
+Running that partition function 
+```{r partition-run}
+time.warm.up <- 200
+time.full <- 300
+
+partitions <- partition_epsilons(sp.inv = c('s','p'), sp.res = 'an') %>%
+  rbind(partition_epsilons(sp.inv = 'an', sp.res = c('s','p'))) %>%
+  #pivot_longer(cols = inv.e0:res.eint) %>%
+  pivot_longer(cols = inv.e0:res.storage) %>%
+  separate(name, into = c('player', 'partition')) %>%
+  pivot_wider(names_from = player, values_from = value) %>%
+  mutate(delta = inv - res,
+         partition = factor(partition, 
+                            levels = c('full','e0','ea','el','eint',
+                                       'storage','nocov')))
+
+# This is not currently generalized
+species_names <- c(
+  an = 'AN invades P',
+  s.p = 'P invades AN'
+)
+
+colors <- c("#5445b1", "#749dae", "#f3c483", "#5c1a33", "#cd3341", "#f7dc6a", "#4DA896")
+colors2 <- c("#749dae", rep('darkslategrey', times = 4), rep("#f3c483", times = 2))
+
+ggplot(partitions, aes(x = partition, y = delta, fill = partition)) + 
+  facet_grid(cols = vars(sp.invader),
+             labeller = labeller(sp.invader = species_names)) + 
+  geom_bar(stat = 'identity', position = position_dodge()) +
+  theme_cw() +
+  ylab('Partitioning of growth rate when rare') +
+  scale_x_discrete(labels = c('full' = 'Full',  'e0' = expression(Delta^0), 'ea' = expression(Delta^alpha),
+                              'el' = expression(Delta^lambda), 'eint' = expression(Delta^{alpha*lambda}),
+                              'storage' = expression(Delta^(alpha*lambda)), 'nocov' = expression(Delta^{alpha!=lambda})),
+                   name = 'Partition') +
+  scale_fill_manual(values = colors2) +
+  guides(fill = 'none')
+
+# ggsave('partitions.pdf', width = 8, height = 5, units = 'in')
 
 ```
