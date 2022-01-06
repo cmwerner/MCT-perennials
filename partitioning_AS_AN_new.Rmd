@@ -1,13 +1,9 @@
 ---
-title: "partitioning_P_AN_new"
-output: html_document
----
----
-title: "Partitioning perennial - nonseedbank annual"
+title: "partitioning_AS_AN_new"
 output: html_document
 ---
 
-Goal is to look at the strength of the storage effect in perennial (P) and nonseedbanking annual (AN) species interactions. We want to measure how the storage effect [and the relative strength of storage effect:relative nonlinearity] changes with 1. magnitude of envrionmental variation 2. autocorrelation of environmental variation
+Goal is to look at the strength of the storage effect in seedbanking annual (AS) and nonseedbanking annual (AN) species interactions. We want to measure how the storage effect [and the relative strength of storage effect:relative nonlinearity] changes with 1. magnitude of envrionmental variation 2. autocorrelation of environmental variation
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -25,85 +21,78 @@ theme_cw <- function () {
       legend.background = element_blank(), 
       legend.key = element_blank(),
       strip.background = element_blank(), 
-      #  strip.text=element_text(size=12),
-      #  axis.text=element_text(size=12),
+    #  strip.text=element_text(size=12),
+    #  axis.text=element_text(size=12),
       complete = TRUE
     )
 }
 ```
 
 ## Parameters and set up
-Setting parameters we're going to use for alpha and lambda under different environmental conditions. 
-
+Setting parameters we're going to use for alpha and lambda under different environmental conditions. Starting with the lambda and alpha parameters for an (as our AN) and as (as our AS) from Hallett et al. 2019 Ecology Letters paper, using the "wet" treatment as our wet environment and the "dry" treatment for our dry environment. Also going to use the seedbank parameters for as listed in that ms, which references Rice 1985, and simplifying the an to being non-seedbanking (so shifting its survival in the seed bank proportion from 0.4 to 0)
+*This is different from the annual-perennial parameters*
 ```{r parameters}
+
+# seed survival and germination fractions
+# don't currently differ by environmental conditions but they could
+as <- 0 # changed to 0 to be a fully non-seedbanking species
+ag <- 0.9
+es <- 0.82
+eg <- 0.6
+
 # main parameters
-pars <- read.csv('model_parameters_perennials_theory.csv') %>%
-  mutate(seed.surv = NULL)
+pars <- read.csv('model_parameters_hallett.csv') %>%
+  mutate(species = ifelse(species == 'Avena', 'an', 'as'), # generalize species names
+         treatment = ifelse(treatment == 'consistentDry','dry','wet')) %>%
+  rename(a.an = aiA, a.as = aiE) %>%
+  select(-X) %>%
+  mutate(seed.surv = ifelse(species == 'an', as, es),
+         seed.germ = ifelse(species == 'an', ag, eg)) # add seed survival and germ columns
 
 # adding average values to the parameter df
 an.means <- pars %>%
   filter(species == 'an') %>% 
-  select(a.an, a.s, a.p, lambda, seed.germ) %>%
+  select(a.an, a.as, lambda, seed.surv, seed.germ) %>%
   colMeans()
-s.means <- pars %>%
-  filter(species == 's') %>% 
-  select(a.an, a.s, a.p, seed.germ, stem.surv) %>%
+as.means <- pars %>%
+  filter(species == 'as') %>% 
+  select(a.an, a.as, lambda, seed.surv, seed.germ) %>%
   colMeans()
-p.means <- pars %>%
-  filter(species == 'p') %>%
-  select(a.an, a.s, a.p, lambda, stem.surv) %>%
-  colMeans()
-
 pars <- pars %>%
   add_row(treatment = 'average', species = 'an', 
-          a.an = an.means['a.an'], a.s = an.means['a.s'], a.p = an.means['a.p'],
-          lambda = an.means['lambda'], seed.germ = an.means['seed.germ'], 
-          stem.surv = NA) %>%
-  add_row(treatment = 'average', species = 's', 
-          a.an = s.means['a.an'], a.s = s.means['a.s'], a.p = s.means['a.p'],
-          lambda = NA, seed.germ = s.means['seed.germ'], 
-          stem.surv = s.means['stem.surv']) %>%
-  add_row(treatment = 'average', species = 'p', 
-          a.an = p.means['a.an'], a.s = p.means['a.s'], a.p = p.means['a.p'],
-          lambda = p.means['lambda'], seed.germ = NA, 
-          stem.surv = p.means['stem.surv'])
-
+          a.an = an.means['a.an'], a.as = an.means['a.as'], lambda = an.means['lambda'],
+          seed.surv = an.means['seed.surv'], seed.germ = an.means['seed.germ']) %>%
+  add_row(treatment = 'average', species = 'as', 
+          a.an = as.means['a.an'], a.as = as.means['a.as'], lambda = as.means['lambda'],
+          seed.surv = as.means['seed.surv'], seed.germ = as.means['seed.germ'])
 ```
 
 Functions for one step of species interaction calculations. Trying to make it general to whether it's both species present or just one--if it's one, that population is just at 0. Takes in the full parameter df for all the species (just for one environmental condition though) and a list of species population sizes. If it's just one species running to equilibrium then it's N0 will be 0. 
+*this is different from the annual-perennial interactions*
 ```{r species-interactions}
 pop_interactions <- function(N0, param){
-  pars.s <- param %>% filter(species == 's')
-  pars.p <- param %>% filter(species == 'p')
+  pars.as <- param %>% filter(species == 'as')
   pars.an <- param %>% filter(species == 'an')
   
-  n.s <- N0$p*pars.p$lambda /
-    (1 + pars.p$a.an * pars.an$seed.germ * N0$an +
-       pars.p$a.s * pars.s$seed.germ * N0$s +
-       pars.p$a.p * N0$p)
-  
-  n.p <- N0$p * pars.p$stem.surv +
-    (N0$s * pars.s$seed.germ * pars.s$stem.surv) /
-    (1 + pars.s$a.an * pars.an$seed.germ * N0$an +
-       pars.s$a.s * pars.s$seed.germ * N0$s +
-       pars.s$a.p * N0$p)
+  n.as <- N0$as * (1 - pars.as$seed.germ) * pars.as$seed.surv + 
+    N0$as * pars.as$seed.germ *pars.as$lambda /
+    (1 + pars.as$a.an * pars.an$seed.germ * N0$an +
+       pars.as$a.as * pars.as$seed.germ * N0$as)
   
   n.an <- N0$an * pars.an$seed.germ *pars.an$lambda /
-    (1+ pars.an$a.an * pars.an$seed.germ * N0$an +
-       pars.an$a.s * pars.s$seed.germ * N0$s +
-       pars.an$a.p * N0$p)
+    (1 + pars.an$a.an * pars.an$seed.germ * N0$an +
+       pars.an$a.as * pars.as$seed.germ * N0$as)
   
   n.all <- tibble(an = n.an,
-                  s = n.s,
-                  p = n.p)
+                  as = n.as)
   return(n.all)
 }
 
 ```
 
 ## Running models
-
-Idea is that sp.invader and sp.resident parameters can be either a single value (ex: 'a') or multiple values (ex: c('s','p'))
+*only thing that changes is the tibble column names in the first step and the lambda columns change from c('lambda','seed.germ','stem.surv') to c('lambda','seed.germ','seed.surv'). This second part could be easily generalized by de-selecting treatment, species, and alpha columns instead*
+Functions in original script (partioning_P_AN_new.Rmd) is that sp.invader and sp.resident parameters can be either a single value (ex: 'a') or multiple values (ex: c('s','p')). This is adjusted for 'an' and 'as' only -- didn't take out the steps of finding the stage distribution for the perennial species since it should automatically skip that for an invader with only one stage. 
 
 *For partitions where lambda is set to not vary, also setting germination and survival terms to not vary*
 ```{r running-invasion}
@@ -115,8 +104,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
   # populations with resident species not impacted by the invader
   # NOTE: this isn't generic to any invader and resident species names
   n.all <- tibble(an = as.numeric(rep(NA, total.time.steps)),
-                  s = as.numeric(rep(NA, total.time.steps)),
-                  p = as.numeric(rep(NA, total.time.steps)))
+                  as = as.numeric(rep(NA, total.time.steps)))
   
   # setting initial populations
   n.all[1,sp.resident] <- N0.r
@@ -138,7 +126,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     p.env <- parameters %>% filter(treatment == env.cond[t])
     
     # adjusting non-varying or non-covarying parameters
-    lambda.columns <- c('lambda','seed.germ','stem.surv') # NOTE would need to change for a generalized function with different parameter columns
+    lambda.columns <- c('lambda','seed.germ','seed.surv') # NOTE would need to change for a generalized function with different parameter columns
     alpha.columns <- c(paste('a', sp.invader, sep = '.'), 
                        paste('a', sp.resident, sep = '.'))
     
@@ -194,7 +182,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     p.env <- parameters %>% filter(treatment == env.cond[t])
     
    # adjusting non-varying or non-covarying parameters
-    lambda.columns <- c('lambda','seed.germ','stem.surv') # NOTE would need to change for a generalized function with different parameter columns
+    lambda.columns <- c('lambda','seed.germ','seed.surv') # NOTE would need to change for a generalized function with different parameter columns
     alpha.columns <- c(paste('a', sp.invader, sep = '.'), 
                        paste('a', sp.resident, sep = '.'))
     
@@ -270,8 +258,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
 
 ```
 
-
-Plotting function so we can visualize what's going on with the different types of variation
+Plotting function so we can visualize what's going on with the different types of variation *unchanged*
 ```{r plotting-function}
 plot_invasion <- function(df){ # plots actual population sizes
   df.long <- df %>% 
@@ -306,8 +293,8 @@ plot_gr <- function(df) { # plots population growth rates
 }
 ```
 
-# Running and plotting invasions
-
+# Running and plotting invasions 
+*unchanged*
 Full variation (normal run)
 ```{r normal-run}
 time.warm.up <- 200
@@ -317,18 +304,18 @@ time.full <- 300
 env.draw <- rbinom(time.full, 1, 0.5) 
 env.condition <- if_else(env.draw > 0, 'wet','dry')
   
-invade.per.full <-  run_invasion(sp.invader = c('s','p'), sp.resident = 'an', N0.r = 100, 
+invade.as.full <-  run_invasion(sp.invader = 'as', sp.resident = 'an', N0.r = 100, 
                          parameters = pars, env.cond = env.condition,
                          vary.lambda = TRUE, vary.alpha = TRUE, 
                          covary = TRUE,
                          init.time.steps = time.warm.up, total.time.steps = time.full)
 
-plot_invasion(invade.per.full)
-plot_gr(invade.per.full)
+plot_invasion(invade.as.full)
+plot_gr(invade.as.full)
 
 
 
-invade.an.full <-  run_invasion(sp.invader = 'an', sp.resident = c('s','p'), N0.r = 100, 
+invade.an.full <-  run_invasion(sp.invader = 'an', sp.resident = 'as', N0.r = 100, 
                          parameters = pars, env.cond = env.condition,
                          vary.lambda = TRUE, vary.alpha = TRUE, 
                          covary = TRUE,
@@ -339,7 +326,8 @@ plot_gr(invade.an.full)
 
 ```
 
-# Calculating partitions
+# Calculating partitions 
+*unchanged*
 Function to calculate partitions for a given invader and resident
 *Could add another small function so we don't have to copy and paste the filter, pivot, mutate, select functions for each step?*
 ```{r partition-function}
@@ -473,12 +461,13 @@ partition_epsilons <- function(sp.inv, sp.res){
 ```
 
 Running that partition function 
+*this changes with the species codes in the call to the partition_epsilons() function and the species_names() labeller*
 ```{r partition-run}
 time.warm.up <- 200
 time.full <- 300
 
-partitions <- partition_epsilons(sp.inv = c('s','p'), sp.res = 'an') %>%
-  rbind(partition_epsilons(sp.inv = 'an', sp.res = c('s','p'))) %>%
+partitions <- partition_epsilons(sp.inv = 'as', sp.res = 'an') %>%
+  rbind(partition_epsilons(sp.inv = 'an', sp.res = 'as')) %>%
   #pivot_longer(cols = inv.e0:res.eint) %>%
   pivot_longer(cols = inv.e0:res.storage) %>%
   separate(name, into = c('player', 'partition')) %>%
@@ -490,8 +479,8 @@ partitions <- partition_epsilons(sp.inv = c('s','p'), sp.res = 'an') %>%
 
 # This is not currently generalized
 species_names <- c(
-  an = 'AN invades P',
-  s.p = 'P invades AN'
+  an = 'AN invades AS',
+  as = 'AS invades AN'
 )
 
 colors <- c("#5445b1", "#749dae", "#f3c483", "#5c1a33", "#cd3341", "#f7dc6a", "#4DA896")
@@ -510,6 +499,6 @@ ggplot(partitions, aes(x = partition, y = delta, fill = partition)) +
   scale_fill_manual(values = colors2) +
   guides(fill = 'none')
 
- #ggsave('partitions_P_AN.pdf', width = 8, height = 5, units = 'in')
+ #ggsave('partitions_AS_AN.pdf', width = 8, height = 5, units = 'in')
 
 ```
