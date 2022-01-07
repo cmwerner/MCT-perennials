@@ -1,66 +1,13 @@
----
-title: "partitioning_general"
-output: html_document
----
-Goal is to look at the strength of the storage effect in seedbanking annual (AS) and nonseedbanking annual (AN) species interactions. We want to measure how the storage effect [and the relative strength of storage effect:relative nonlinearity] changes with 1. magnitude of envrionmental variation 2. autocorrelation of environmental variation
+# Simple version of MCT partitioning functions to make running on Teton easier
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-library(tidyverse)
+### Species interactions one time step ------------
 
-## Personal ggplot theme
-theme_cw <- function () { 
-  theme_bw(base_size=12) %+replace% 
-    theme(
-      panel.background = element_blank(), 
-      plot.background = element_blank(), 
-      axis.ticks = element_line(colour = "grey70", size = rel(0.5)),
-      panel.grid.minor = element_blank(), 
-      panel.grid.major.x = element_blank(),
-      legend.background = element_blank(), 
-      legend.key = element_blank(),
-      strip.background = element_blank(), 
-    #  strip.text=element_text(size=12),
-    #  axis.text=element_text(size=12),
-      complete = TRUE
-    )
-}
-```
+# Functions for one step of species interaction calculations. 
+# Takes in a parameter df for all the species for one environmental condition
+# and a list of species population sizes. 
+# General to whether it's both species present or just one running to equilibrium
+# if it's one, the other population is just at 0. 
 
-## Parameters and set up
-
-This step defines which coexistence pair we're looking at, seedbanking annual with non-seedbanking annual, or perennial with non-seedbanking annual. Then sets parameters we're going to use for alpha and lambda under different environmental conditions. 
-
-For the seedbanking annual with non-seedbanking annual interaction, uses lambda and alpha values for avena (as our AN) and erodium (as our AS) from Hallett et al. 2019 Ecology Letters paper, using the "wet" treatment as our wet environment and the "dry" treatment for our dry environment. Also going to use the seedbank parameters for as listed in that ms, which references Rice 1985, and simplifying the an to being non-seedbanking (so shifting its survival in the seed bank proportion from 0.4 to 0) *Note: planning to simplify this to be more about theoretical expectations*
-
-For the perennial with non-seedbanking annual interaction, uses the theoretical parameters. 
-```{r parameters}
-
-# seedbanking annual - nonseedbanking annual parameters
-
-# seed survival and germination fractions
-# don't currently differ by environmental conditions but they could
-as <- 0 # changed to 0 to be a fully non-seedbanking species
-ag <- 0.9
-es <- 0.82
-eg <- 0.6
-
-pars.as.an <- read.csv('model_parameters_hallett.csv') %>%
-  mutate(species = ifelse(species == 'Avena', 'an', 'as'), # generalize species names
-         treatment = ifelse(treatment == 'consistentDry','dry','wet')) %>%
-  rename(a.an = aiA, a.as = aiE) %>%
-  select(-X) %>%
-  mutate(seed.surv = ifelse(species == 'an', as, es),
-         seed.germ = ifelse(species == 'an', ag, eg)) # add seed survival and germ columns
-
-# perennial - nonseedbanking annual parameters
-pars.p.an <- read.csv('model_parameters_perennials_theory.csv') %>%
-  mutate(seed.surv = NULL)
-
-```
-
-Functions for one step of species interaction calculations. Trying to make it general to whether it's both species present or just one--if it's one, that population is just at 0. Takes in the full parameter df for all the species (just for one environmental condition though) and a list of species population sizes. If it's just one species running to equilibrium then it's N0 will be 0. 
-```{r species-interactions}
 pop_interactions <- function(N0, param){
   
   # seedbanking annual - nonseedbanking annual
@@ -110,14 +57,22 @@ pop_interactions <- function(N0, param){
   return(n.all)
 }
 
-```
 
-## Running models
+### Running an invasion sequence ------------
 
-Idea is that sp.invader and sp.resident parameters can be either a single value (ex: 'a') or multiple values (ex: c('s','p'))
+# Runs a single species (resident) for a number of initial time steps, and then invades the other species
+# for the remaining time steps. The invading species comes in at a population of 1 at each time step
+# and is reset for the next one with the growth rate saved for each invasion. 
+# Resident species populations are tracked as both their population growth with the invader included
+# to get the growth rate, and without the invader to determine the starting population for the next time step
 
-*For partitions where lambda is set to not vary, also setting germination and survival terms to not vary*
-```{r running-invasion}
+# sp.invader and sp.resident parameters can be either a single value (ex: 'a') for annual species
+# or multiple values (ex: c('s','p')) for perennial species. With perennial species as the invader,
+# at each time step the perennial species is first run to equilibrium to determine
+# what the stage ratio should be, and then this stage distribution is used for the invasion step
+
+#For partitions where lambda is set to not vary, also setting germination and survival terms to not vary
+
 run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
                          vary.lambda = TRUE, vary.alpha = TRUE, covary = TRUE,
                          init.time.steps = 50, total.time.steps = 100) {
@@ -212,7 +167,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     # parameters for the varying env condition
     p.env <- parameters %>% filter(treatment == env.cond[t])
     
-   # adjusting non-varying or non-covarying parameters
+    # adjusting non-varying or non-covarying parameters
     lambda.columns <- c('lambda','seed.germ','seed.surv') # NOTE would need to change for a generalized function with different parameter columns
     alpha.columns <- c(paste('a', sp.invader, sep = '.'), 
                        paste('a', sp.resident, sep = '.'))
@@ -287,78 +242,15 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
   
 }
 
-```
 
-Plotting function so we can visualize what's going on with the different types of variation
-```{r plotting-function}
-plot_invasion <- function(df){ # plots actual population sizes
-  df.long <- df %>% 
-    pivot_longer(cols = !c(time, starts_with('gr')),
-                 names_to = 'species', values_to = 'n',
-                 values_drop_na = TRUE) %>% 
-    mutate(n.log = log(n))
+### Calculating partitions --------------
 
-  
-  ggplot(df.long, aes(x = time, y = n.log, color = species)) +
-    geom_line() +
-    theme_cw() +
-    xlab('Time') + 
-    ylab('Population size (log)')
-  
-}
+# Function to calculate partitions for a given invader and resident,
+# returns a df with invader growth rate, resident growth rate, and the invader-resident delta
+# partitioned into the full growth rate, no env variation, variation in lambda, variation in alpha, 
+# interaction between variation in lambda and variation in alpha. This last term is then 
+# further partitioned into the storage effect (covariation) and a remnant term without covariation
 
-plot_gr <- function(df) { # plots population growth rates
-  df.long <- df %>% 
-    pivot_longer(cols = starts_with('gr'),
-                 names_to = 'species', values_to = 'n',
-                 values_drop_na = TRUE) %>% 
-    mutate(n.log = log(n))
-  
-  
-  ggplot(df.long, aes(x = time, y = n.log, color = species)) +
-    geom_line() +
-    geom_point() +
-    theme_cw() +
-    xlab('Time') + 
-    ylab('Growth Rate (log)')
-}
-```
-
-# Running and plotting invasions 
-Full variation (normal run)
-```{r normal-run}
-time.warm.up <- 200
-time.full <- 300
-
-# two equally probable environmental conditions
-env.draw <- rbinom(time.full, 1, 0.5) 
-env.condition <- if_else(env.draw > 0, 'wet','dry')
-  
-invade.as.full <-  run_invasion(sp.invader = 'as', sp.resident = 'an', N0.r = 100, 
-                         parameters = pars, env.cond = env.condition,
-                         vary.lambda = TRUE, vary.alpha = TRUE, 
-                         covary = TRUE,
-                         init.time.steps = time.warm.up, total.time.steps = time.full)
-
-plot_invasion(invade.as.full)
-plot_gr(invade.as.full)
-
-
-
-invade.an.full <-  run_invasion(sp.invader = 'an', sp.resident = 'as', N0.r = 100, 
-                         parameters = pars, env.cond = env.condition,
-                         vary.lambda = TRUE, vary.alpha = TRUE, 
-                         covary = TRUE,
-                         init.time.steps = time.warm.up, total.time.steps = time.full)
-
-plot_invasion(invade.an.full)
-plot_gr(invade.an.full)
-
-```
-
-# Calculating partitions 
-Function to calculate partitions for a given invader and resident
-```{r partition-function}
 partition_epsilons <- function(sp.inv, sp.res, pars, 
                                env.condition, time.warm.up, time.full){
   res.name <- paste(sp.res, collapse = '.')
@@ -453,7 +345,7 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
   part$res.eint <- part$res.full - (part$res.e0 + part$res.el + part$res.ea)
   
   # # no correlation
-   invade.nocov <- run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
+  invade.nocov <- run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
                                N0.r = 100, parameters = pars, env.cond = env.condition,
                                init.time.steps = time.warm.up, total.time.steps = time.full,
                                vary.lambda = TRUE, vary.alpha = TRUE,
@@ -464,106 +356,18 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
                  values_to = 'growth.rate',
                  values_drop_na = TRUE) %>% 
     mutate(gr.log = log(growth.rate))
-   
-   part$inv.nocov <- invade.nocov %>% 
+  
+  part$inv.nocov <- invade.nocov %>% 
     filter(species == inv.name) %>%
     select(gr.log) %>% colMeans()
-   part$res.nocov <- invade.nocov %>% 
+  part$res.nocov <- invade.nocov %>% 
     filter(species == res.name) %>%
     select(gr.log) %>% colMeans()
   
-   # storage effect
-   part$inv.storage <- part$inv.eint - part$inv.nocov
-   part$res.storage <- part$res.eint - part$res.nocov
+  # storage effect
+  part$inv.storage <- part$inv.eint - part$inv.nocov
+  part$res.storage <- part$res.eint - part$res.nocov
   
   return(part)
 }
 
-
-```
-
-Running that partition function *This would get split into a separate script to run on Teton computing cluster*
-```{r partition-run}
-
-# This determines which coexistence pair we're looking at
-pair <- 'as.an'
-#pair <- 'p.an'
-
-# select the relevant parameter set
-if(pair == 'as.an') {
-  pars <- pars.as.an
-}
-if(pair == 'p.an'){
-  pars <- pars.p.an
-}
-
-env.ratio <- 0.5 # ratio of wet years to dry years
-
-# adding rows for the weighted average of the parameters
-pars <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1-env.ratio))
-
-pars.ave <- pars %>% 
-    group_by(species) %>%
-    summarise_if(is.numeric,
-                 ~ weighted.mean(., weight)) %>%
-  mutate(weight = NA, treatment = 'average')
-
-pars <- pars %>% full_join(pars.ave)
-
-time.warm.up <- 200
-time.full <- 300
-
-# Next steps: Repeat this multiple times! Start trying out different scenarios!
-# Also probably get it set up to work on Teton to save time
-
-# Environmental conditions
-env.draw <- rbinom(time.full, 1, env.ratio) # sequence of the environment (NOTE: would want this to change if doing multiple runs)
-env.condition <- if_else(env.draw > 0, 'wet','dry')
-
-partitions <- partition_epsilons(sp.inv = 'as', sp.res = 'an', pars, 
-                                 env.condition, time.warm.up, time.full) %>%
-  rbind(partition_epsilons(sp.inv = 'an', sp.res = 'as', pars, 
-                           env.condition, time.warm.up, time.full)) %>%
-  #pivot_longer(cols = inv.e0:res.eint) %>%
-  pivot_longer(cols = inv.e0:res.storage) %>%
-  separate(name, into = c('player', 'partition')) %>%
-  pivot_wider(names_from = player, values_from = value) %>%
-  mutate(delta = inv - res,
-         partition = factor(partition, 
-                            levels = c('full','e0','ea','el','eint',
-                                       'storage','nocov')))
-
-# Titles for invasion interactions
-if(pair == 'as.an'){
-  species_names <- c(
-    an = 'AN invades AS',
-    as = 'AS invades AN'
-  )
-}
-if(pair == 'p.an'){
-  species_names <- c(
-    an = 'AN invades P',
-    s.p = 'P invades AN'
-  )
-}
-
-
-colors <- c("#5445b1", "#749dae", "#f3c483", "#5c1a33", "#cd3341", "#f7dc6a", "#4DA896")
-colors2 <- c("#749dae", rep('darkslategrey', times = 4), rep("#f3c483", times = 2))
-
-ggplot(partitions, aes(x = partition, y = delta, fill = partition)) + 
-  facet_grid(cols = vars(sp.invader),
-             labeller = labeller(sp.invader = species_names)) + 
-  geom_bar(stat = 'identity', position = position_dodge()) +
-  theme_cw() +
-  ylab('Partitioning of growth rate when rare') +
-  scale_x_discrete(labels = c('full' = 'Full',  'e0' = expression(Delta^0), 'ea' = expression(Delta^alpha),
-                              'el' = expression(Delta^lambda), 'eint' = expression(Delta^{alpha*lambda}),
-                              'storage' = expression(Delta^(alpha*lambda)), 'nocov' = expression(Delta^{alpha!=lambda})),
-                   name = 'Partition') +
-  scale_fill_manual(values = colors2) +
-  guides(fill = 'none')
-
- #ggsave('partitions_AS_AN.pdf', width = 8, height = 5, units = 'in')
-
-```
