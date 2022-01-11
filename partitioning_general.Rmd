@@ -87,21 +87,22 @@ pop_interactions <- function(N0, param){
     pars.p <- param %>% filter(species == 'p')
     pars.an <- param %>% filter(species == 'an')
     
-    n.s <- N0$p*pars.p$lambda /
-      (1 + pars.p$a.an * pars.an$seed.germ * N0$an +
-         pars.p$a.s * pars.s$seed.germ * N0$s +
-         pars.p$a.p * N0$p)
     
-    n.p <- N0$p * pars.p$stem.surv +
-      (N0$s * pars.s$seed.germ * pars.s$stem.surv) /
-      (1 + pars.s$a.an * pars.an$seed.germ * N0$an +
-         pars.s$a.s * pars.s$seed.germ * N0$s +
-         pars.s$a.p * N0$p)
-    
-    n.an <- N0$an * pars.an$seed.germ *pars.an$lambda /
-      (1+ pars.an$a.an * pars.an$seed.germ * N0$an +
-         pars.an$a.s * pars.s$seed.germ * N0$s +
-         pars.an$a.p * N0$p)
+  n.s <- N0$p*pars.p$lambda /
+    (1 + pars.p$a.an * pars.an$seed.germ * N0$an +
+       pars.p$a.s * pars.s$seed.germ * N0$s +
+       pars.p$a.p * N0$p)
+  
+  n.p <- N0$p * pars.p$stem.surv +
+    (N0$s * pars.s$seed.germ * pars.s$stem.surv) /
+    (1 + pars.s$a.an * pars.an$seed.germ * N0$an +
+       pars.s$a.s * pars.s$seed.germ * N0$s +
+       pars.s$a.p * N0$p)
+  
+  n.an <- N0$an * pars.an$seed.germ *pars.an$lambda /
+    (1+ pars.an$a.an * pars.an$seed.germ * N0$an +
+       pars.an$a.s * pars.s$seed.germ * N0$s +
+       pars.an$a.p * N0$p)
     
     n.all <- tibble(an = n.an,
                     s = n.s,
@@ -139,6 +140,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
   # setting initial populations
   n.all[1,sp.resident] <- N0.r
   n.all[1,sp.invader] <- 0
+  
   
   # name of column(s) for resident species pop when impacted by invading pop
   sp.res.impact <- paste(sp.resident, 'impact', sep = '.')
@@ -178,11 +180,11 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
       p.env[,lambda.columns] <- lambda.env[,lambda.columns]
       p.env[,alpha.columns] <- alpha.env[,alpha.columns]
     }
-    
     # running one time step with the appropriate environmental parameters
     n.all[t+1,] <- pop_interactions(N0 = n.all[t,], param = p.env)
     
   }
+  
   
   # figuring out rough invader population distribution if the invader is perennial
   # using average parameters and resident population size during the final warm-up step
@@ -213,9 +215,6 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     p.env <- parameters %>% filter(treatment == env.cond[t])
     
    # adjusting non-varying or non-covarying parameters
-    lambda.columns <- c('lambda','seed.germ','seed.surv') # NOTE would need to change for a generalized function with different parameter columns
-    alpha.columns <- c(paste('a', sp.invader, sep = '.'), 
-                       paste('a', sp.resident, sep = '.'))
     
     # constant lambda
     if(vary.lambda == FALSE){
@@ -406,7 +405,7 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
     select(gr.log) %>% colMeans()
   
   part$inv.el <- l.inv.mean - part$inv.e0 
-  part$res.el <- l.res.mean- part$inv.e0
+  part$res.el <- l.res.mean- part$res.e0
   
   # alpha variation only
   invade.a <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
@@ -428,7 +427,7 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
     select(gr.log) %>% colMeans()
   
   part$inv.ea <- a.inv.mean - part$inv.e0 
-  part$res.ea <- a.res.mean- part$inv.e0
+  part$res.ea <- a.res.mean- part$res.e0
   
   # full variation
   invade.full <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
@@ -465,13 +464,17 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
                  values_drop_na = TRUE) %>% 
     mutate(gr.log = log(growth.rate))
    
-   part$inv.nocov <- invade.nocov %>% 
+   nocov.inv <- invade.nocov %>% 
     filter(species == inv.name) %>%
     select(gr.log) %>% colMeans()
-   part$res.nocov <- invade.nocov %>% 
+   nocov.res <- invade.nocov %>% 
     filter(species == res.name) %>%
     select(gr.log) %>% colMeans()
   
+   
+   part$inv.nocov <- nocov.inv - (part$inv.e0 + part$inv.el + part$inv.ea)
+   part$res.nocov <- nocov.res - (part$res.e0 + part$res.el + part$res.ea)
+   
    # storage effect
    part$inv.storage <- part$inv.eint - part$inv.nocov
    part$res.storage <- part$res.eint - part$res.nocov
@@ -492,9 +495,15 @@ pair <- 'as.an'
 # select the relevant parameter set
 if(pair == 'as.an') {
   pars <- pars.as.an
+  sp.1 <- 'an'
+  sp.2 <- 'as'
+  sp.order <- c('an','as') 
 }
 if(pair == 'p.an'){
   pars <- pars.p.an
+  sp.1 <- 'an'
+  sp.2 <- c('s','p')
+  sp.order <- c('an','s','p')
 }
 
 env.ratio <- 0.5 # ratio of wet years to dry years
@@ -506,7 +515,8 @@ pars.ave <- pars %>%
     group_by(species) %>%
     summarise_if(is.numeric,
                  ~ weighted.mean(., weight)) %>%
-  mutate(weight = NA, treatment = 'average')
+  mutate(weight = NA, treatment = 'average') %>% 
+  arrange(factor(species, levels = sp.order)) # need to keep them in the right order for later
 
 pars <- pars %>% full_join(pars.ave)
 
@@ -520,9 +530,9 @@ time.full <- 300
 env.draw <- rbinom(time.full, 1, env.ratio) # sequence of the environment (NOTE: would want this to change if doing multiple runs)
 env.condition <- if_else(env.draw > 0, 'wet','dry')
 
-partitions <- partition_epsilons(sp.inv = 'as', sp.res = 'an', pars, 
+partitions <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars, 
                                  env.condition, time.warm.up, time.full) %>%
-  rbind(partition_epsilons(sp.inv = 'an', sp.res = 'as', pars, 
+  rbind(partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars, 
                            env.condition, time.warm.up, time.full)) %>%
   #pivot_longer(cols = inv.e0:res.eint) %>%
   pivot_longer(cols = inv.e0:res.storage) %>%
@@ -567,3 +577,97 @@ ggplot(partitions, aes(x = partition, y = delta, fill = partition)) +
  #ggsave('partitions_AS_AN.pdf', width = 8, height = 5, units = 'in')
 
 ```
+
+Running over an environmental sequence instead of a particular env.ratio
+*note that the partition call is not yet generalized*
+```{r env-seq}
+# This determines which coexistence pair we're looking at
+pair <- 'as.an'
+#pair <- 'p.an'
+
+# select the relevant parameter set
+if(pair == 'as.an') {
+  pars <- pars.as.an
+}
+if(pair == 'p.an'){
+  pars <- pars.p.an
+}
+
+# number of time steps for each run
+time.warm.up <- 200
+time.full <- 300
+
+# initialise dataframe
+partitions.env <- tibble(sp.invader = character(), sp.resident = character(),
+                         partition = character(),
+                         inv = numeric(), res = numeric(), delta = numeric(), 
+                         env.ratio = numeric())
+
+env.seq <- seq(0, 1, by = 0.5) # ratio of wet years to dry years
+
+for(env.ratio in env.seq){
+  # adding rows for the weighted average of the parameters
+  pars.2 <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1 - env.ratio))
+  
+  pars.ave <- pars.2 %>% 
+    group_by(species) %>%
+    summarise_if(is.numeric,
+                 ~ weighted.mean(., weight)) %>%
+    mutate(weight = NA, treatment = 'average')
+  
+  pars.2 <- pars.2 %>% full_join(pars.ave)
+  
+  
+  env.draw <- rbinom(time.full, 1, env.ratio) # sequence of the environment (NOTE: would want this to change if doing multiple runs)
+  env.condition <- if_else(env.draw > 0, 'wet','dry')
+  
+  partitions <- partition_epsilons(sp.inv = 'as', sp.res = 'an', pars.2, 
+                                   env.condition, time.warm.up, time.full) %>%
+    rbind(partition_epsilons(sp.inv = 'an', sp.res = 'as', pars.2, 
+                             env.condition, time.warm.up, time.full)) %>%
+    #pivot_longer(cols = inv.e0:res.eint) %>%
+    pivot_longer(cols = inv.e0:res.storage) %>%
+    separate(name, into = c('player', 'partition')) %>%
+    pivot_wider(names_from = player, values_from = value) %>%
+    mutate(delta = inv - res,
+           partition = factor(partition, 
+                              levels = c('full','e0','ea','el','eint', 'storage','nocov')))
+  partitions$env.ratio <- env.ratio
+  
+  partitions.env <- full_join(partitions.env, partitions, 
+                              by = c('sp.invader','sp.resident','partition',
+                                     'inv','res', 'delta','env.ratio'))
+}
+
+```
+
+
+Loading in rdata file from partitions run on the computer cluster
+```{r partition-seq}
+
+# as-an competition partitions
+load('mct-partitions-as.RData')
+#View(simulations[[1]])
+
+part.long <- simulations %>% map_dfr(bind_rows, .id = "run")
+
+part.sum <- part.long %>% 
+  group_by(sp.invader, sp.resident, partition, env.ratio) %>%
+  dplyr::summarise(
+    inv.mean = mean(inv),
+    res.mean = mean(res),
+    delta.mean = mean(delta),
+    delta.se = sd(delta)/sqrt(length(delta))
+  )
+
+ggplot(part.sum, aes(x = env.ratio, y = delta.mean, 
+                     ymin = delta.mean - delta.se, 
+                     ymax = delta.mean + delta.se, 
+                     color = partition, fill = partition)) +
+  facet_grid(cols = vars(sp.invader)) +
+  geom_line() +
+  geom_ribbon(alpha = 0.3) +
+  theme_cw()
+
+```
+

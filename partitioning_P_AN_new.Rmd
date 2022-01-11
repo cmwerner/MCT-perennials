@@ -176,6 +176,8 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     change <- 1
     
     while(change > 0.1){
+      print(n.old)
+      print(p.ave)
       n.update <- pop_interactions(N0 = n.old, param = p.ave)
       n.per.total <- sum(n.update[sp.invader])
       n.update[sp.invader] <- n.update[sp.invader]/n.per.total

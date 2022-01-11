@@ -3,9 +3,12 @@ n_processors <- 32 # number of nodes
 n_sims <- 100
 
 # Set the working directory and load necessary data and libraries
-setwd("/project/commbayes/SparseInteractions/BH_sims/") ## CHANGE this to coexistence folder
+setwd("/project/coexistence/cwerner5/") ## CHANGE this to coexistence folder
 library(parallel)
 library(Rmpi)
+library(dplyr)
+library(tidyr)
+library(tibble)
 
 
 # SET PARAMETER VALUES
@@ -50,7 +53,10 @@ time.full <- 300
 
 Run_part_function <- function(i){
   
-  partitions.env <- tibble()
+  partitions.env <- tibble(sp.invader = character(), sp.resident = character(),
+                           partition = character(),
+                           inv = numeric(), res = numeric(), delta = numeric(), 
+                           env.ratio = numeric())
   env.seq <- seq(0, 1, by = 0.05) # ratio of wet years to dry years
   
   for(env.ratio in env.seq){
@@ -82,7 +88,9 @@ Run_part_function <- function(i){
                                 levels = c('full','e0','ea','el','eint', 'storage','nocov')))
     partitions$env.ratio <- env.ratio
     
-    partitions.env <- full_join(partitions.env, partitions)
+    partitions.env <- full_join(partitions.env, partitions, 
+                                by = c('sp.invader','sp.resident','partition',
+                                       'inv','res', 'delta','env.ratio'))
   }
     return(partitions.env)
 }
@@ -102,7 +110,7 @@ clusterExport(cl, ObjectsToImport) # values and vectors not functions
 # Run any commands necessary on the processors before running the simulation. This 
 #    is where you can set the working directory of the processors, source any
 #    necessary files, or load any necessary libraries
-clusterEvalQ(cl, setwd("/project/commbayes/SparseInteractions/BH_sims/")) # CHANGE this to coexistence folder
+clusterEvalQ(cl, setwd("/project/coexistence/cwerner5/")) # CHANGE this to coexistence folder
 clusterEvalQ(cl, library(dplyr))
 clusterEvalQ(cl, library(tidyr))
 clusterEvalQ(cl, library(tibble))
