@@ -57,7 +57,7 @@ time.full <- 300
 #    a single simulation, and will then be repeated enough times to produce
 #    the desired number of simulations.
 
-Run_part_function <- function(){
+Run_part_function <- function(i){
   
   partitions.env <- tibble(sp.invader = character(), sp.resident = character(),
                            partition = character(),
@@ -73,7 +73,8 @@ Run_part_function <- function(){
       group_by(species) %>%
       summarise_if(is.numeric,
                    ~ weighted.mean(., weight)) %>%
-      mutate(weight = NA, treatment = 'average')
+      mutate(weight = NA, treatment = 'average') %>% 
+      arrange(factor(species, levels = sp.order))
     
     pars.2 <- pars.2 %>% full_join(pars.ave)
     
@@ -109,7 +110,7 @@ cl <- makeCluster(n_processors - 1, type = "MPI")
 #    set up before?). The names of the objects need to be stored together as character
 #    vectors because you are basically just telling R what to look for in the environment.
 
-ObjectsToImport <- c("pars", "time.warm.up", "time.full", "pair") # Check that this is everything
+ObjectsToImport <- c("pars", "time.warm.up", "time.full", "pair", "sp.1", "sp.2", "sp.order") # Check that this is everything
 
 clusterExport(cl, ObjectsToImport) # values and vectors not functions
 
@@ -132,4 +133,4 @@ simulations <- clusterApply(cl, x = 1:n_sims, fun = Run_part_function) # run it 
 
 
 # Save as an r dataframe
-save(simulations, file=('mct-partitions-as.RData'))
+save(simulations, file=('mct-partitions-as_2.RData'))

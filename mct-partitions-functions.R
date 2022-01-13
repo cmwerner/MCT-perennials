@@ -294,7 +294,7 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
     select(gr.log) %>% colMeans()
   
   part$inv.el <- l.inv.mean - part$inv.e0 
-  part$res.el <- l.res.mean- part$inv.e0
+  part$res.el <- l.res.mean- part$res.e0
   
   # alpha variation only
   invade.a <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
@@ -316,7 +316,7 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
     select(gr.log) %>% colMeans()
   
   part$inv.ea <- a.inv.mean - part$inv.e0 
-  part$res.ea <- a.res.mean- part$inv.e0
+  part$res.ea <- a.res.mean- part$res.e0
   
   # full variation
   invade.full <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
