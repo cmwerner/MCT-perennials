@@ -168,10 +168,6 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     p.env <- parameters %>% filter(treatment == env.cond[t])
     
     # adjusting non-varying or non-covarying parameters
-    lambda.columns <- c('lambda','seed.germ','seed.surv') # NOTE would need to change for a generalized function with different parameter columns
-    alpha.columns <- c(paste('a', sp.invader, sep = '.'), 
-                       paste('a', sp.resident, sep = '.'))
-    
     # constant lambda
     if(vary.lambda == FALSE){
       p.env[,lambda.columns] <- p.ave[,lambda.columns]
@@ -344,7 +340,7 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
   part$inv.eint <- part$inv.full - (part$inv.e0 + part$inv.el + part$inv.ea)
   part$res.eint <- part$res.full - (part$res.e0 + part$res.el + part$res.ea)
   
-  # # no correlation
+  # no correlation
   invade.nocov <- run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
                                N0.r = 100, parameters = pars, env.cond = env.condition,
                                init.time.steps = time.warm.up, total.time.steps = time.full,
@@ -357,12 +353,15 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
                  values_drop_na = TRUE) %>% 
     mutate(gr.log = log(growth.rate))
   
-  part$inv.nocov <- invade.nocov %>% 
+  nocov.inv <- invade.nocov %>% 
     filter(species == inv.name) %>%
     select(gr.log) %>% colMeans()
-  part$res.nocov <- invade.nocov %>% 
+  nocov.res <- invade.nocov %>% 
     filter(species == res.name) %>%
     select(gr.log) %>% colMeans()
+  
+  part$inv.nocov <- nocov.inv - (part$inv.e0 + part$inv.el + part$inv.ea)
+  part$res.nocov <- nocov.res - (part$res.e0 + part$res.el + part$res.ea)
   
   # storage effect
   part$inv.storage <- part$inv.eint - part$inv.nocov
@@ -370,4 +369,3 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
   
   return(part)
 }
-

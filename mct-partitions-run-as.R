@@ -38,9 +38,15 @@ pair <- 'as.an'
 # select the relevant parameter set
 if(pair == 'as.an') {
   pars <- pars.as.an
+  sp.1 <- 'an'
+  sp.2 <- 'as'
+  sp.order <- c('an','as') 
 }
 if(pair == 'p.an'){
   pars <- pars.p.an
+  sp.1 <- 'an'
+  sp.2 <- c('s','p')
+  sp.order <- c('an','s','p')
 }
 
 # number of time steps for each run
@@ -51,7 +57,7 @@ time.full <- 300
 #    a single simulation, and will then be repeated enough times to produce
 #    the desired number of simulations.
 
-Run_part_function <- function(i){
+Run_part_function <- function(){
   
   partitions.env <- tibble(sp.invader = character(), sp.resident = character(),
                            partition = character(),
@@ -75,9 +81,9 @@ Run_part_function <- function(i){
     env.draw <- rbinom(time.full, 1, env.ratio) # sequence of the environment (NOTE: would want this to change if doing multiple runs)
     env.condition <- if_else(env.draw > 0, 'wet','dry')
     
-    partitions <- partition_epsilons(sp.inv = 'as', sp.res = 'an', pars.2, 
+    partitions <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars.2, 
                                      env.condition, time.warm.up, time.full) %>%
-      rbind(partition_epsilons(sp.inv = 'an', sp.res = 'as', pars.2, 
+      rbind(partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars.2, 
                                env.condition, time.warm.up, time.full)) %>%
       #pivot_longer(cols = inv.e0:res.eint) %>%
       pivot_longer(cols = inv.e0:res.storage) %>%

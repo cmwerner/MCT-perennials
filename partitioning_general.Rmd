@@ -451,7 +451,7 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
   part$inv.eint <- part$inv.full - (part$inv.e0 + part$inv.el + part$inv.ea)
   part$res.eint <- part$res.full - (part$res.e0 + part$res.el + part$res.ea)
   
-  # # no correlation
+  # no correlation
    invade.nocov <- run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
                                N0.r = 100, parameters = pars, env.cond = env.condition,
                                init.time.steps = time.warm.up, total.time.steps = time.full,
@@ -603,7 +603,7 @@ partitions.env <- tibble(sp.invader = character(), sp.resident = character(),
                          inv = numeric(), res = numeric(), delta = numeric(), 
                          env.ratio = numeric())
 
-env.seq <- seq(0, 1, by = 0.5) # ratio of wet years to dry years
+env.seq <- seq(0, 1, by = 0.05) # ratio of wet years to dry years
 
 for(env.ratio in env.seq){
   # adding rows for the weighted average of the parameters
