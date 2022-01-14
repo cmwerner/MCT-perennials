@@ -489,8 +489,8 @@ Running that partition function *This would get split into a separate script to 
 ```{r partition-run}
 
 # This determines which coexistence pair we're looking at
-pair <- 'as.an'
-#pair <- 'p.an'
+#pair <- 'as.an'
+pair <- 'p.an'
 
 # select the relevant parameter set
 if(pair == 'as.an') {
@@ -506,7 +506,7 @@ if(pair == 'p.an'){
   sp.order <- c('an','s','p')
 }
 
-env.ratio <- 0.5 # ratio of wet years to dry years
+env.ratio <- 0.3 # ratio of wet years to dry years
 
 # adding rows for the weighted average of the parameters
 pars <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1-env.ratio))
@@ -540,7 +540,7 @@ partitions <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars,
   pivot_wider(names_from = player, values_from = value) %>%
   mutate(delta = inv - res,
          partition = factor(partition, 
-                            levels = c('full','e0','ea','el','eint',
+                            levels = c('full','e0','el','ea','eint',
                                        'storage','nocov')))
 
 # Titles for invasion interactions
@@ -588,56 +588,68 @@ pair <- 'as.an'
 # select the relevant parameter set
 if(pair == 'as.an') {
   pars <- pars.as.an
+  sp.1 <- 'an'
+  sp.2 <- 'as'
+  sp.order <- c('an','as') 
 }
 if(pair == 'p.an'){
   pars <- pars.p.an
+  sp.1 <- 'an'
+  sp.2 <- c('s','p')
+  sp.order <- c('an','s','p')
 }
+
 
 # number of time steps for each run
-time.warm.up <- 200
-time.full <- 300
+time.warm.up <- 50
+time.full <- 100
 
 # initialise dataframe
-partitions.env <- tibble(sp.invader = character(), sp.resident = character(),
-                         partition = character(),
-                         inv = numeric(), res = numeric(), delta = numeric(), 
-                         env.ratio = numeric())
-
-env.seq <- seq(0, 1, by = 0.05) # ratio of wet years to dry years
-
-for(env.ratio in env.seq){
-  # adding rows for the weighted average of the parameters
-  pars.2 <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1 - env.ratio))
+  partitions.env <- tibble(sp.invader = character(), sp.resident = character(),
+                           partition = character(),
+                           inv = numeric(), res = numeric(), delta = numeric(), 
+                           env.ratio = numeric())
+  env.seq <- seq(0, 1, by = 0.25) # ratio of wet years to dry years
   
-  pars.ave <- pars.2 %>% 
-    group_by(species) %>%
-    summarise_if(is.numeric,
-                 ~ weighted.mean(., weight)) %>%
-    mutate(weight = NA, treatment = 'average')
+  for(env.ratio in env.seq){
+    # adding rows for the weighted average of the parameters
+    pars.2 <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1 - env.ratio))
+    
+    pars.ave <- pars.2 %>% 
+      group_by(species) %>%
+      summarise_if(is.numeric,
+                   ~ weighted.mean(., weight)) %>%
+      mutate(weight = NA, treatment = 'average') %>% 
+      arrange(factor(species, levels = sp.order)) # need to keep them in the right order for later
+    
+    pars.2 <- pars.2 %>% full_join(pars.ave)
+    
+    
+    env.draw <- rbinom(time.full, 1, env.ratio) # sequence of the environment (NOTE: would want this to change if doing multiple runs)
+    env.condition <- if_else(env.draw > 0, 'wet','dry')
+    
+    partitions <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars.2, 
+                                     env.condition, time.warm.up, time.full) %>%
+      rbind(partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars.2, 
+                               env.condition, time.warm.up, time.full)) %>%
+      #pivot_longer(cols = inv.e0:res.eint) %>%
+      pivot_longer(cols = inv.e0:res.storage) %>%
+      separate(name, into = c('player', 'partition')) %>%
+      pivot_wider(names_from = player, values_from = value) %>%
+      mutate(delta = inv - res,
+             partition = factor(partition, 
+                                levels = c('full','e0','el','ea','eint', 'storage','nocov')))
+    partitions$env.ratio <- env.ratio
+    
+    partitions.env <- full_join(partitions.env, partitions, 
+                                by = c('sp.invader','sp.resident','partition',
+                                       'inv','res', 'delta','env.ratio'))
+  }
   
-  pars.2 <- pars.2 %>% full_join(pars.ave)
-  
-  
-  env.draw <- rbinom(time.full, 1, env.ratio) # sequence of the environment (NOTE: would want this to change if doing multiple runs)
-  env.condition <- if_else(env.draw > 0, 'wet','dry')
-  
-  partitions <- partition_epsilons(sp.inv = 'as', sp.res = 'an', pars.2, 
-                                   env.condition, time.warm.up, time.full) %>%
-    rbind(partition_epsilons(sp.inv = 'an', sp.res = 'as', pars.2, 
-                             env.condition, time.warm.up, time.full)) %>%
-    #pivot_longer(cols = inv.e0:res.eint) %>%
-    pivot_longer(cols = inv.e0:res.storage) %>%
-    separate(name, into = c('player', 'partition')) %>%
-    pivot_wider(names_from = player, values_from = value) %>%
-    mutate(delta = inv - res,
-           partition = factor(partition, 
-                              levels = c('full','e0','ea','el','eint', 'storage','nocov')))
-  partitions$env.ratio <- env.ratio
-  
-  partitions.env <- full_join(partitions.env, partitions, 
-                              by = c('sp.invader','sp.resident','partition',
-                                     'inv','res', 'delta','env.ratio'))
-}
+  ggplot(partitions.env, aes(x = env.ratio, y = delta, color = partition)) +
+    facet_grid(cols = vars(sp.invader)) +
+    geom_line()  +
+    theme_cw()
 
 ```
 
@@ -645,11 +657,32 @@ for(env.ratio in env.seq){
 Loading in rdata file from partitions run on the computer cluster
 ```{r partition-seq}
 
-# as-an competition partitions
-load('mct-partitions-as.RData')
-#View(simulations[[1]])
+#pair <- 'as.an'
+pair <- 'p.an'
 
-part.long <- simulations %>% map_dfr(bind_rows, .id = "run")
+# Load data and set titles for invasion interactions
+if(pair == 'as.an'){
+  load('mct-partitions-as_2.RData')
+  species_names <- c(
+    an = 'AN invades AS',
+    as = 'AS invades AN'
+  )
+  file.out <- 'partitions-AS-AN_env-ratio.pdf'
+}
+if(pair == 'p.an'){
+  load('mct-partitions-p.RData')
+  species_names <- c(
+    an = 'AN invades P',
+    s.p = 'P invades AN'
+  )
+  file.out <- 'partitions-P-AN_env-ratio.pdf'
+}
+
+# summary of the partition results
+part.long <- simulations %>% map_dfr(bind_rows, .id = "run") %>%
+  mutate(partition = factor(partition, 
+                            levels = c('full','e0','el','ea','eint',
+                                       'storage','nocov')))
 
 part.sum <- part.long %>% 
   group_by(sp.invader, sp.resident, partition, env.ratio) %>%
@@ -660,14 +693,33 @@ part.sum <- part.long %>%
     delta.se = sd(delta)/sqrt(length(delta))
   )
 
+# plot stuff
+partition.legend <- c(
+  'full' = 'Full',  
+  'e0' = expression(Delta^0), 
+  'el' = expression(Delta^lambda), 
+  'ea' = expression(Delta^alpha),
+  'eint' = expression(Delta^{alpha*lambda}),
+  'storage' = expression(Delta^(alpha*lambda)), 
+  'nocov' = expression(Delta^{alpha!=lambda})
+)
+
+cb_palette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00")
+
 ggplot(part.sum, aes(x = env.ratio, y = delta.mean, 
                      ymin = delta.mean - delta.se, 
                      ymax = delta.mean + delta.se, 
                      color = partition, fill = partition)) +
-  facet_grid(cols = vars(sp.invader)) +
+  facet_grid(cols = vars(sp.invader),
+             labeller = labeller(sp.invader = species_names)) + 
   geom_line() +
-  geom_ribbon(alpha = 0.3) +
-  theme_cw()
+ # geom_ribbon() +
+  theme_cw() +
+  scale_color_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
+  xlab ('Proportion wet years') +
+  ylab('Delta')
+
+#ggsave(file.out, width = 8, height = 5, units = 'in')
 
 ```
 
