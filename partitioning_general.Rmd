@@ -506,7 +506,7 @@ if(pair == 'p.an'){
   sp.order <- c('an','s','p')
 }
 
-env.ratio <- 0.3 # ratio of wet years to dry years
+env.ratio <- 0.5 # ratio of wet years to dry years
 
 # adding rows for the weighted average of the parameters
 pars <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1-env.ratio))
@@ -549,16 +549,18 @@ if(pair == 'as.an'){
     an = 'AN invades AS',
     as = 'AS invades AN'
   )
+  file.out <- 'partitions-AS-AN.pdf'
 }
 if(pair == 'p.an'){
   species_names <- c(
     an = 'AN invades P',
     s.p = 'P invades AN'
   )
+  file.out <- 'partitions-P-AN.pdf'
 }
 
 
-colors <- c("#5445b1", "#749dae", "#f3c483", "#5c1a33", "#cd3341", "#f7dc6a", "#4DA896")
+cb_palette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00")
 colors2 <- c("#749dae", rep('darkslategrey', times = 4), rep("#f3c483", times = 2))
 
 ggplot(partitions, aes(x = partition, y = delta, fill = partition)) + 
@@ -567,19 +569,20 @@ ggplot(partitions, aes(x = partition, y = delta, fill = partition)) +
   geom_bar(stat = 'identity', position = position_dodge()) +
   theme_cw() +
   ylab('Partitioning of growth rate when rare') +
-  scale_x_discrete(labels = c('full' = 'Full',  'e0' = expression(Delta^0), 'ea' = expression(Delta^alpha),
-                              'el' = expression(Delta^lambda), 'eint' = expression(Delta^{alpha*lambda}),
-                              'storage' = expression(Delta^(alpha*lambda)), 'nocov' = expression(Delta^{alpha!=lambda})),
+  scale_x_discrete(labels = c('full' = 'Full',  'e0' = expression(Delta^0),
+                              'el' = expression(Delta^lambda), 'ea' = expression(Delta^alpha),
+                              'eint' = expression(Delta^{alpha*lambda}),
+                              'storage' = expression(Delta^(alpha*lambda)), 
+                              'nocov' = expression(Delta^{alpha!=lambda})),
                    name = 'Partition') +
-  scale_fill_manual(values = colors2) +
+  scale_fill_manual(values = cb_palette) +
   guides(fill = 'none')
 
- #ggsave('partitions_AS_AN.pdf', width = 8, height = 5, units = 'in')
+ ggsave(file.out, width = 8, height = 5, units = 'in')
 
 ```
 
-Running over an environmental sequence instead of a particular env.ratio
-*note that the partition call is not yet generalized*
+Not used: Running over an environmental sequence instead of a particular env.ratio. This was used for testing before running on the computer cluster
 ```{r env-seq}
 # This determines which coexistence pair we're looking at
 pair <- 'as.an'
@@ -591,6 +594,7 @@ if(pair == 'as.an') {
   sp.1 <- 'an'
   sp.2 <- 'as'
   sp.order <- c('an','as') 
+  
 }
 if(pair == 'p.an'){
   pars <- pars.p.an
