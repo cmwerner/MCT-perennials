@@ -7,6 +7,7 @@ Goal is to look at the strength of the storage effect in seedbanking annual (AS)
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+library(xtable)
 
 ## Personal ggplot theme
 theme_cw <- function () { 
@@ -658,7 +659,7 @@ time.full <- 100
 ```
 
 
-Loading in rdata file from partitions run on the computer cluster
+# Loading in rdata file from partitions run on the computer cluster
 ```{r partition-seq}
 
 #pair <- 'as.an'
@@ -724,6 +725,13 @@ ggplot(part.sum, aes(x = env.ratio, y = delta.mean,
   ylab('Delta')
 
 #ggsave(file.out, width = 8, height = 5, units = 'in')
+
+# table output to latex
+# part.sum %>% 
+#   filter(env.ratio %in% c(0.0, 0.25, 0.5, 0.75, 1.0)) %>%
+#   arrange(sp.invader, env.ratio) %>%
+#   xtable() %>%
+#   print(., include.rownames = FALSE)
 
 ```
 
