@@ -3,7 +3,7 @@ n_processors <- 32 # number of nodes
 n_sims <- 100
 
 # Set the working directory and load necessary data and libraries
-setwd("/project/coexistence/cwerner5/") ## CHANGE this to coexistence folder
+setwd("/project/coexistence/cwerner5/") 
 library(parallel)
 library(Rmpi)
 library(dplyr)
@@ -14,21 +14,11 @@ library(tibble)
 # SET PARAMETER VALUES
 
 # seedbanking annual - nonseedbanking annual parameters
-as <- 0 # changed to 0 to be a fully non-seedbanking species
-ag <- 0.9
-es <- 0.82
-eg <- 0.6
-
-pars.as.an <- read.csv('model_parameters_hallett.csv') %>%
-  mutate(species = ifelse(species == 'Avena', 'an', 'as'), # generalize species names
-         treatment = ifelse(treatment == 'consistentDry','dry','wet')) %>%
-  rename(a.an = aiA, a.as = aiE) %>%
-  select(-X) %>%
-  mutate(seed.surv = ifelse(species == 'an', as, es),
-         seed.germ = ifelse(species == 'an', ag, eg)) # add seed survival and germ columns
+pars.as.an <- read.csv('model_parameters_annuals_lambda.csv') %>%
+  mutate(stem.surv = NULL) 
 
 # perennial - nonseedbanking annual parameters
-pars.p.an <- read.csv('model_parameters_perennials_theory.csv') %>%
+pars.p.an <- read.csv('model_parameters_perennials_lambda.csv') %>%
   mutate(seed.surv = NULL)
 
 # This determines which coexistence pair we're looking at

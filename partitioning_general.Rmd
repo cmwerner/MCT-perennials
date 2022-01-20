@@ -38,24 +38,11 @@ For the perennial with non-seedbanking annual interaction, uses the theoretical 
 ```{r parameters}
 
 # seedbanking annual - nonseedbanking annual parameters
-
-# seed survival and germination fractions
-# don't currently differ by environmental conditions but they could
-as <- 0 # changed to 0 to be a fully non-seedbanking species
-ag <- 0.9
-es <- 0.82
-eg <- 0.6
-
-pars.as.an <- read.csv('model_parameters_hallett.csv') %>%
-  mutate(species = ifelse(species == 'Avena', 'an', 'as'), # generalize species names
-         treatment = ifelse(treatment == 'consistentDry','dry','wet')) %>%
-  rename(a.an = aiA, a.as = aiE) %>%
-  select(-X) %>%
-  mutate(seed.surv = ifelse(species == 'an', as, es),
-         seed.germ = ifelse(species == 'an', ag, eg)) # add seed survival and germ columns
+pars.as.an <- read.csv('model_parameters_annuals_lambda_opposite.csv') %>%
+  mutate(stem.surv = NULL) 
 
 # perennial - nonseedbanking annual parameters
-pars.p.an <- read.csv('model_parameters_perennials_theory.csv') %>%
+pars.p.an <- read.csv('model_parameters_perennials_lambda_opposite.csv') %>%
   mutate(seed.surv = NULL)
 
 ```
@@ -325,7 +312,7 @@ plot_gr <- function(df) { # plots population growth rates
 ```
 
 # Running and plotting invasions 
-Full variation (normal run)
+Full variation (normal run) *This is old and doesn't work anymore*
 ```{r normal-run}
 time.warm.up <- 200
 time.full <- 300
@@ -579,7 +566,7 @@ ggplot(partitions, aes(x = partition, y = delta, fill = partition)) +
   scale_fill_manual(values = cb_palette) +
   guides(fill = 'none')
 
- ggsave(file.out, width = 8, height = 5, units = 'in')
+ # ggsave(file.out, width = 8, height = 5, units = 'in')
 
 ```
 
@@ -651,10 +638,29 @@ time.full <- 100
                                        'inv','res', 'delta','env.ratio'))
   }
   
+  partitions.env <- partitions.env  %>%
+    mutate(partition = factor(partition, 
+                            levels = c('full','e0','el','ea','eint',
+                                       'storage','nocov')))
+  
+  partition.legend <- c(
+  'full' = 'Full',  
+  'e0' = expression(Delta^0), 
+  'el' = expression(Delta^lambda), 
+  'ea' = expression(Delta^alpha),
+  'eint' = expression(Delta^{alpha*lambda}),
+  'storage' = expression(Delta^(alpha*lambda)), 
+  'nocov' = expression(Delta^{alpha!=lambda})
+)
+  
   ggplot(partitions.env, aes(x = env.ratio, y = delta, color = partition)) +
-    facet_grid(cols = vars(sp.invader)) +
-    geom_line()  +
-    theme_cw()
+  facet_grid(cols = vars(sp.invader),
+             labeller = labeller(sp.invader = species_names)) + 
+  geom_line() +
+  theme_cw() +
+  scale_color_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
+  xlab ('Proportion wet years') +
+  ylab('Delta')
 
 ```
 
