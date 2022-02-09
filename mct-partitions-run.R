@@ -3,7 +3,7 @@ n_processors <- 32 # number of nodes
 n_sims <- 100
 
 # Set the working directory and load necessary data and libraries
-setwd("/project/coexistence/cwerner5/") ## CHANGE this to coexistence folder
+setwd("/project/coexistence/cwerner5/") 
 library(parallel)
 library(Rmpi)
 library(dplyr)
@@ -11,31 +11,40 @@ library(tidyr)
 library(tibble)
 
 # CHOOSE: This determines which coexistence pair we're looking at
-pair <- 'as.an'
-#pair <- 'p.an'
+case <- 'as'
+# case <- 'p'
 
-# and the output filename
-file.out <- 'mct-partitions_as-lambda-same.RData'
+pair <- paste(case, 'an', sep = '.')
+
+#varying <- 'lambda'
+varying <- 'alpha'
+
+favorable <- 'same-consistent'
+# favorable <- 'opposite-consistent'
+# favorable <- 'same-flipped'
+# favorable <- 'opposite-flipped'
+
+# file names
+
+file.core <- paste0(case, '_', varying, '-', favorable)
+main.wd <- '/project/coexistence/cwerner5/'
+
+file.in <- paste0(main.wd, 'model-parameters/model-parameters_', file.core, '.csv')
+
+file.out <- paste0(main.wd, 'model-data/mct-partitions_', file.core, '.RData')
 
 # SET PARAMETER VALUES 
-# seedbanking annual - nonseedbanking annual parameters
-pars.as.an <- read.csv('model_parameters_annuals_lambda.csv') %>%
+pars <- read.csv(file.in) %>%
   mutate(stem.surv = NULL) 
-
-# perennial - nonseedbanking annual parameters
-pars.p.an <- read.csv('model_parameters_perennials_lambda.csv') %>%
-  mutate(seed.surv = NULL)
 
 
 # select the relevant parameter set
 if(pair == 'as.an') {
-  pars <- pars.as.an
   sp.1 <- 'an'
   sp.2 <- 'as'
   sp.order <- c('an','as') 
 }
 if(pair == 'p.an'){
-  pars <- pars.p.an
   sp.1 <- 'an'
   sp.2 <- c('s','p')
   sp.order <- c('an','s','p')
@@ -109,7 +118,7 @@ clusterExport(cl, ObjectsToImport) # values and vectors not functions
 # Run any commands necessary on the processors before running the simulation. This 
 #    is where you can set the working directory of the processors, source any
 #    necessary files, or load any necessary libraries
-clusterEvalQ(cl, setwd("/project/coexistence/cwerner5/")) # CHANGE this to coexistence folder
+clusterEvalQ(cl, setwd("/project/coexistence/cwerner5/")) 
 clusterEvalQ(cl, library(dplyr))
 clusterEvalQ(cl, library(tidyr))
 clusterEvalQ(cl, library(tibble))

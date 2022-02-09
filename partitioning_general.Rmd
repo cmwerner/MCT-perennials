@@ -8,6 +8,7 @@ Goal is to look at the strength of the storage effect in seedbanking annual (AS)
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(xtable)
+library(here)
 
 ## Personal ggplot theme
 theme_cw <- function () { 
@@ -669,28 +670,44 @@ time.full <- 100
 ```{r partition-seq}
 
 # pair <- 'as.an'
- pair <- 'p.an'
+# pair <- 'p.an'
+
+case <- 'as'
+#case <- 'p'
+
+# do only lambda/germination/survival terms vary by environment or do the alpha terms vary too?
+#varying <- 'lambda'
+varying <- 'alpha'
+
+# parameter settings for favorable vs unfavorable environments
+# for lambda varying the options are 'same' or 'opposite'
+# with alpha also varying the options are 'same-consistent', 'same-flipped',
+# 'opposite-consistent', and 'opposite-flipped' where same and opposite determine whether
+# the two species have similar or opposing responses to the environmental condition
+# and consistent or flipped determine whether the lambda and alpha terms have similar
+# or opposing responses to the environment
+
+favorable <- 'opposite-flipped'
+#favorable <- 'same-consistent' 
+
+file.core <- paste0('mct-partitions_', case, '_', varying, '-', favorable)
+
+load(here(paste0('model-data/', file.core, '.RData')))
+plot.out.env <- here(paste0('figures/', file.core, '_env-ratio.pdf')) 
+plot.out.50 <- here(paste0('figures/', file.core, '_50.pdf'))
 
 # Load data and set titles for invasion interactions
-if(pair == 'as.an'){
-  # load('mct-partitions_as-lambda-same.RData')
-  load('mct-partitions_as-lambda-opposite.RData')
+if(case == 'as'){
   species_names <- c(
     an = 'AN invades AS',
     as = 'AS invades AN'
   )
-   #file.out <- 'partitions_as-lambda-same_env-ratio.pdf'
-   file.out <- 'partitions_as-lambda-opposite_env-ratio.pdf'
 }
-if(pair == 'p.an'){
-  # load('mct-partitions_p-lambda-same.RData')
-  load('mct-partitions_p-lambda-opposite.RData')
+if(case == 'p'){
   species_names <- c(
     an = 'AN invades P',
     s.p = 'P invades AN'
   )
-  # file.out <- 'partitions_p-lambda-same__env-ratio.pdf'
-   file.out <- 'partitions_p-lambda-opposite_env-ratio.pdf'
 }
 
 # summary of the partition results
@@ -732,10 +749,10 @@ ggplot(part.sum, aes(x = env.ratio)) +
   theme_cw() +
   scale_color_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
   scale_fill_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
-  xlab ('Proportion wet years') +
+  xlab ('Ratio of env 1 to env 2') +
   ylab('Delta')
 
-  ggsave(file.out, width = 8, height = 5, units = 'in')
+  ggsave(plot.out.env, width = 8, height = 5, units = 'in')
 
 # plotting for just the 50-50 condition
 ggplot(filter(part.sum, env.ratio == 0.5), 
@@ -745,7 +762,7 @@ ggplot(filter(part.sum, env.ratio == 0.5),
            fill = partition)) + 
   facet_grid(cols = vars(sp.invader),
              labeller = labeller(sp.invader = species_names)) + 
-  geom_errorbar(position = position_dodge(), color = 'grey50') +
+  geom_errorbar(position = position_dodge(), color = 'grey50', width = 0.2) +
   geom_bar(stat = 'identity', position = position_dodge()) +
   theme_cw() +
   ylab('Partitioning of growth rate when rare') +
@@ -758,26 +775,9 @@ ggplot(filter(part.sum, env.ratio == 0.5),
   scale_fill_manual(values = cb_palette) +
   guides(fill = 'none')
 
-# another option
-ggplot(filter(part.sum, env.ratio == 0.5), 
-       aes(x = partition, y = delta.mean, 
-           ymin = delta.mean - delta.sd, 
-                               ymax = delta.mean + delta.sd,
-           color = partition)) + 
-  facet_grid(cols = vars(sp.invader),
-             labeller = labeller(sp.invader = species_names)) + 
-  geom_errorbar() +
-  geom_point(size = 3) +
-  theme_cw() +
-  ylab('Partitioning of growth rate when rare') +
-  scale_x_discrete(labels = c('full' = 'Full',  'e0' = expression(Delta^0),
-                              'el' = expression(Delta^lambda), 'ea' = expression(Delta^alpha),
-                              'eint' = expression(Delta^{alpha*lambda}),
-                              'storage' = expression(Delta^(alpha*lambda)), 
-                              'nocov' = expression(Delta^{alpha!=lambda})),
-                   name = 'Partition') +
-  scale_color_manual(values = cb_palette) +
-  guides(color = 'none')
+  ggsave(plot.out.50, width = 8, height = 5, units = 'in')
+
+
 
 
 # table output to latex
