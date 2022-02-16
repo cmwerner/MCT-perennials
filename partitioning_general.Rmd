@@ -39,11 +39,11 @@ For the perennial with non-seedbanking annual interaction, uses the theoretical 
 ```{r parameters}
 
 # seedbanking annual - nonseedbanking annual parameters
-pars.as.an <- read.csv('model_parameters_annuals_lambda_opposite.csv') %>%
+pars.as.an <- read.csv(here('model-parameters/model-parameters_as_lambda-same.csv')) %>%
   mutate(stem.surv = NULL) 
 
 # perennial - nonseedbanking annual parameters
-pars.p.an <- read.csv('model_parameters_perennials_lambda_opposite.csv') %>%
+pars.p.an <- read.csv('model-parameters_p_lambda-same.csv') %>%
   mutate(seed.surv = NULL)
 
 ```
@@ -478,8 +478,8 @@ Running that partition function *This would get split into a separate script to 
 ```{r partition-run}
 
 # This determines which coexistence pair we're looking at
-#pair <- 'as.an'
-pair <- 'p.an'
+pair <- 'as.an'
+#pair <- 'p.an'
 
 # select the relevant parameter set
 if(pair == 'as.an') {
