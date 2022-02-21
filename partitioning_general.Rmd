@@ -43,7 +43,7 @@ pars.as.an <- read.csv(here('model-parameters/model-parameters_as_lambda-same.cs
   mutate(stem.surv = NULL) 
 
 # perennial - nonseedbanking annual parameters
-pars.p.an <- read.csv('model-parameters_p_lambda-same.csv') %>%
+pars.p.an <- read.csv(here('model-parameters/model-parameters_p_lambda-same.csv')) %>%
   mutate(seed.surv = NULL)
 
 ```
@@ -477,19 +477,42 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
 Running that partition function *This would get split into a separate script to run on Teton computing cluster*
 ```{r partition-run}
 
-# This determines which coexistence pair we're looking at
-pair <- 'as.an'
-#pair <- 'p.an'
+# CHOOSE: This determines which coexistence pair we're looking at
+#case <- 'as'
+ case <- 'p'
+
+pair <- paste(case, 'an', sep = '.')
+
+varying <- 'lambda'
+#varying <- 'alpha'
+
+favorable <- 'same'
+# favorable <- 'same-consistent'
+# favorable <- 'opposite-consistent'
+# favorable <- 'same-flipped'
+# favorable <- 'opposite-flipped'
+
+# file names
+
+file.core <- paste0(case, '_', varying, '-', favorable)
+main.wd <- '/project/coexistence/cwerner5/'
+
+file.in <- paste0(main.wd, 'model-parameters/model-parameters_', file.core, '.csv')
+
+file.out <- paste0(main.wd, 'model-data/mct-partitions_', file.core, '.RData')
+
+# SET PARAMETER VALUES 
+pars <- read.csv(file.in) %>%
+  mutate(stem.surv = NULL) 
+
 
 # select the relevant parameter set
 if(pair == 'as.an') {
-  pars <- pars.as.an
   sp.1 <- 'an'
   sp.2 <- 'as'
   sp.order <- c('an','as') 
 }
 if(pair == 'p.an'){
-  pars <- pars.p.an
   sp.1 <- 'an'
   sp.2 <- c('s','p')
   sp.order <- c('an','s','p')

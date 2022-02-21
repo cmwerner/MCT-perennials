@@ -11,15 +11,17 @@ library(tidyr)
 library(tibble)
 
 # CHOOSE: This determines which coexistence pair we're looking at
-case <- 'as'
-# case <- 'p'
+# case <- 'as'
+ case <- 'p'
 
 pair <- paste(case, 'an', sep = '.')
 
-#varying <- 'lambda'
-varying <- 'alpha'
+varying <- 'lambda'
+#varying <- 'alpha'
 
-favorable <- 'same-consistent'
+ favorable <- 'same'
+# favorable <- 'opposite'
+# favorable <- 'same-consistent'
 # favorable <- 'opposite-consistent'
 # favorable <- 'same-flipped'
 # favorable <- 'opposite-flipped'
@@ -34,20 +36,21 @@ file.in <- paste0(main.wd, 'model-parameters/model-parameters_', file.core, '.cs
 file.out <- paste0(main.wd, 'model-data/mct-partitions_', file.core, '.RData')
 
 # SET PARAMETER VALUES 
-pars <- read.csv(file.in) %>%
-  mutate(stem.surv = NULL) 
+pars <- read.csv(file.in) 
 
 
 # select the relevant parameter set
 if(pair == 'as.an') {
   sp.1 <- 'an'
   sp.2 <- 'as'
-  sp.order <- c('an','as') 
+  sp.order <- c('an','as')
+pars <- pars %>% mutate(stem.surv = NULL) 
 }
 if(pair == 'p.an'){
   sp.1 <- 'an'
   sp.2 <- c('s','p')
   sp.order <- c('an','s','p')
+pars <- pars %>% mutate(seed.surv = NULL)
 }
 
 # number of time steps for each run
