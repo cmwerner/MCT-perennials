@@ -179,6 +179,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
   # using average parameters and resident population size during the final warm-up step
   # makes it faster for running in for loop
   if(length(sp.invader) > 1) {
+
     n.inv.start <- 1/length(sp.invader)
     n.old <- n.all[init.time.steps,]
     n.old[sp.invader] <- n.inv.start
@@ -187,17 +188,16 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     
     while(change > 0.1){
       n.update <- pop_interactions(N0 = n.old, param = p.ave)
+
       n.per.total <- sum(n.update[sp.invader])
       n.update[sp.invader] <- n.update[sp.invader]/n.per.total
       n.update[sp.resident] <- n.old[sp.resident]
       n.old <- n.update
-      
       n.new.inv <- n.update[sp.invader]
       change <- abs(n.old.inv - n.new.inv[1])
       n.old.inv <- n.new.inv[1]
     }
   } 
-  
   # running the resident and invader for the remaining time steps
   for (t in (init.time.steps+1):(total.time.steps-1)){
     # parameters for the varying env condition
@@ -281,7 +281,7 @@ Plotting function so we can visualize what's going on with the different types o
 ```{r plotting-function}
 plot_invasion <- function(df){ # plots actual population sizes
   df.long <- df %>% 
-    pivot_longer(cols = !c(time, starts_with('gr')),
+    pivot_longer(cols = !c(time, env, inv, res, run, starts_with('gr')),
                  names_to = 'species', values_to = 'n',
                  values_drop_na = TRUE) %>% 
     mutate(n.log = log(n))
@@ -313,36 +313,202 @@ plot_gr <- function(df) { # plots population growth rates
 ```
 
 # Running and plotting invasions 
-Full variation (normal run) *This is old and doesn't work anymore*
+Full variation (normal run) 
 ```{r normal-run}
-time.warm.up <- 200
-time.full <- 300
+time.warm.up <- 20
+time.full <- 200
+
+
+case <- 'p'
+
+pair <- paste(case, 'an', sep = '.')
+
+# select the relevant parameter set
+if(pair == 'as.an') {
+  sp.1 <- 'an'
+  sp.2 <- 'as'
+  sp.order <- c('an','as') 
+  pars <- pars.as.an 
+}
+
+if(pair == 'p.an'){
+  sp.1 <- 'an'
+  sp.2 <- c('s','p')
+  sp.order <- c('an','s','p')
+  pars <- pars.p.an
+}
+  
 
 # two equally probable environmental conditions
-env.draw <- rbinom(time.full, 1, 0.5) 
+env.ratio <- 0.5
+env.draw <- rbinom(time.full, 1, env.ratio) 
 env.condition <- if_else(env.draw > 0, 'wet','dry')
+
+pars <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1-env.ratio))
+
+pars.ave <- pars %>% 
+    group_by(species) %>%
+    summarise_if(is.numeric,
+                 ~ weighted.mean(., weight)) %>%
+  mutate(weight = NA, treatment = 'average') %>% 
+  arrange(factor(species, levels = sp.order)) # need to keep them in the right order for later
+
+pars <- pars %>% full_join(pars.ave)
+
+invade.1.full <-  run_invasion(sp.invader = sp.1, sp.resident = sp.2, N0.r = 100, 
+                         parameters = pars, env.cond = env.condition,
+                         vary.lambda = TRUE, vary.alpha = TRUE, 
+                         init.time.steps = time.warm.up, total.time.steps = time.full) 
+
+
+invade.2.full <-  run_invasion(sp.invader = sp.2, sp.resident = sp.1,
+                               N0.r = 100, parameters = pars, env.cond = env.condition,
+                               init.time.steps = time.warm.up, total.time.steps = time.full,
+                               vary.lambda = TRUE, vary.alpha = TRUE)
+
+
+plot_invasion(filter(invade.1.full, time > time.warm.up))
+# ggsave('invasion-example-1.pdf', width = 5, height = 3, units = 'in')
+plot_gr(invade.1.full)
+# ggsave('invasion-example-2.pdf', width = 5, height = 3, units = 'in')
+
+
+plot_invasion(filter(invade.2.full, time > time.warm.up))
+# ggsave('invasion-example-3.pdf', width = 5, height = 3, units = 'in')
+plot_gr(invade.2.full)
+# ggsave('invasion-example-4.pdf', width = 5, height = 3, units = 'in')
+
+
+invade.1.long <- invade.1.full %>%
+    filter(time > time.warm.up + 1) %>% 
+    pivot_longer(cols = starts_with('gr'),
+                 names_to = 'species', names_prefix = 'gr.',
+                 values_to = 'growth.rate',
+                 values_drop_na = TRUE) %>% 
+    mutate(gr.log = log(growth.rate))
   
-invade.as.full <-  run_invasion(sp.invader = 'as', sp.resident = 'an', N0.r = 100, 
-                         parameters = pars, env.cond = env.condition,
-                         vary.lambda = TRUE, vary.alpha = TRUE, 
-                         covary = TRUE,
-                         init.time.steps = time.warm.up, total.time.steps = time.full)
+test1 <- invade.1.long %>% 
+    filter(species == sp.1.name) %>%
+    select(gr.log) %>% colMeans()
 
-plot_invasion(invade.as.full)
-plot_gr(invade.as.full)
+test2 <- invade.1.long %>% 
+    filter(species == sp.2.name) %>%
+    select(gr.log) %>% colMeans()
 
-
-
-invade.an.full <-  run_invasion(sp.invader = 'an', sp.resident = 'as', N0.r = 100, 
-                         parameters = pars, env.cond = env.condition,
-                         vary.lambda = TRUE, vary.alpha = TRUE, 
-                         covary = TRUE,
-                         init.time.steps = time.warm.up, total.time.steps = time.full)
-
-plot_invasion(invade.an.full)
-plot_gr(invade.an.full)
 
 ```
+
+
+Same as above but doing multiple runs for troubleshooting
+```{r full-multiple-runs}
+
+time.warm.up <- 20
+time.full <- 200
+
+case <- 'p'
+
+pair <- paste(case, 'an', sep = '.')
+
+# select the relevant parameter set
+if(pair == 'as.an') {
+  sp.1 <- 'an'
+  sp.2 <- 'as'
+  sp.order <- c('an','as') 
+  pars <- pars.as.an 
+}
+
+if(pair == 'p.an'){
+  sp.1 <- 'an'
+  sp.2 <- c('s','p')
+  sp.order <- c('an','s','p')
+  pars <- pars.p.an
+}
+
+  sp.1.name <- paste(sp.1, collapse = '.')
+  sp.2.name <- paste(sp.2, collapse = '.')
+  
+invade.runs <- tibble()
+
+env.ratio <- 0.5
+
+pars <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1-env.ratio))
+
+pars.ave <- pars %>% 
+    group_by(species) %>%
+    summarise_if(is.numeric,
+                 ~ weighted.mean(., weight)) %>%
+  mutate(weight = NA, treatment = 'average') %>% 
+  arrange(factor(species, levels = sp.order))  # need to keep them in the right order for later
+
+for(i in 1:40){
+  # two equally probable environmental conditions
+env.draw <- rbinom(time.full, 1, env.ratio) 
+env.condition <- if_else(env.draw > 0, 'wet','dry')
+
+pars <- pars %>% full_join(pars.ave)
+
+invade.1 <-  run_invasion(sp.invader = sp.1, sp.resident = sp.2, N0.r = 100, 
+                         parameters = pars, env.cond = env.condition,
+                         vary.lambda = TRUE, vary.alpha = TRUE, 
+                         init.time.steps = time.warm.up, total.time.steps = time.full) %>%
+  add_column(inv = sp.1.name, res = sp.2.name, run = i, env = env.condition) %>%
+  filter(time > time.warm.up + 1)
+
+invade.2 <-  run_invasion(sp.invader = sp.2, sp.resident = sp.1,
+                               N0.r = 100, parameters = pars, env.cond = env.condition,
+                               init.time.steps = time.warm.up, total.time.steps = time.full,
+                               vary.lambda = TRUE, vary.alpha = TRUE) %>%
+  add_column(inv = sp.2.name, res = sp.1.name, run = i, env = env.condition) %>%
+  filter(time > time.warm.up + 1)
+
+
+invade.both <- bind_rows(invade.1, invade.2)
+
+invade.runs <- bind_rows(invade.runs, invade.both)
+}
+
+test <- invade.runs %>% filter(run == 1, inv == sp.1.name)
+
+
+
+
+sp.res.gr <- invade.runs %>% group_by(inv, res, run) %>%
+  dplyr::summarise(
+    gr.sp.mean = mean(log(gr.s.p)),
+    gr.an.mean = mean(log(gr.an))
+  ) %>% filter(res == 's.p')
+
+which(abs(sp.res.gr$gr.sp.mean) > 0.005)
+
+sp.inv.gr <- invade.runs %>% group_by(inv, res, run) %>%
+  dplyr::summarise(
+    gr.sp.mean = mean(log(gr.s.p)),
+    gr.an.mean = mean(log(gr.an))
+  ) %>% filter(inv == 's.p')
+which(abs(sp.inv.gr$gr.sp.mean) > 0.2)
+
+hist(sp.inv.gr$gr.sp.mean)
+
+test.3 <- filter(invade.runs, run == 3, inv == 's.p')
+test.4 <- filter(invade.runs, run == 4, inv == 's.p')
+plot_gr(test.3)
+ggsave(filename = 'test3_gr.pdf')
+plot_gr(test.4)
+ggsave(filename = 'test4_gr.pdf')
+
+plot_invasion(test.3)
+ggsave(filename = 'test3_pop.pdf')
+plot_invasion(test.4)
+ggsave(filename = 'test4_pop.pdf')
+
+hist(test.3$gr.s.p)
+hist(test.4$gr.s.p)
+
+mean(log(test.3$gr.s.p))
+mean(log(test.4$gr.s.p))
+
+```
+
 
 # Calculating partitions 
 Function to calculate partitions for a given invader and resident
@@ -495,14 +661,14 @@ favorable <- 'same'
 # file names
 
 file.core <- paste0(case, '_', varying, '-', favorable)
-main.wd <- '/project/coexistence/cwerner5/'
+main.wd <- '/project/coexistence/cwerner5/'  # needs to be updated
 
 file.in <- paste0(main.wd, 'model-parameters/model-parameters_', file.core, '.csv')
 
 file.out <- paste0(main.wd, 'model-data/mct-partitions_', file.core, '.RData')
 
 # SET PARAMETER VALUES 
-pars <- read.csv(file.in) %>%
+pars <- read.csv(file.in) %>% # THIS NEEDS TO BE GENERALIZED
   mutate(stem.surv = NULL) 
 
 
@@ -695,12 +861,12 @@ time.full <- 100
 # pair <- 'as.an'
 # pair <- 'p.an'
 
-case <- 'as'
-#case <- 'p'
+# case <- 'as'
+ case <- 'p'
 
 # do only lambda/germination/survival terms vary by environment or do the alpha terms vary too?
-#varying <- 'lambda'
-varying <- 'alpha'
+ varying <- 'lambda'
+# varying <- 'alpha'
 
 # parameter settings for favorable vs unfavorable environments
 # for lambda varying the options are 'same' or 'opposite'
@@ -710,8 +876,13 @@ varying <- 'alpha'
 # and consistent or flipped determine whether the lambda and alpha terms have similar
 # or opposing responses to the environment
 
-favorable <- 'opposite-flipped'
-#favorable <- 'same-consistent' 
+ favorable <- 'same'
+# favorable <- 'opposite'
+# favorable <- 'same-consistent' 
+# favorable <- 'same-flipped' 
+# favorable <- 'opposite-consistent' 
+# favorable <- 'opposite-flipped'
+
 
 file.core <- paste0('mct-partitions_', case, '_', varying, '-', favorable)
 
@@ -797,12 +968,64 @@ ggplot(filter(part.sum, env.ratio == 0.5),
                    name = 'Partition') +
   scale_fill_manual(values = cb_palette) +
   guides(fill = 'none')
-
-  ggsave(plot.out.50, width = 8, height = 5, units = 'in')
-
+ggsave(plot.out.50, width = 8, height = 5, units = 'in')
 
 
+# hist for the 50-50 condition
+ggplot(filter(part.long, env.ratio == 0.5, partition == 'full', sp.invader == 's.p'), 
+       aes(inv)) +
+  geom_histogram()
 
+ggplot(filter(part.long, env.ratio == 0.5, partition == 'full', sp.invader == 's.p'), 
+       aes(res)) +
+  geom_histogram()
+  
+  
+### Plots to try to investigate the high variation in when the perennial is the invader
+plot.out.sp.delta <- here(paste0('figures/', file.core, '_delta.pdf'))
+plot.out.sp.inv <- here(paste0('figures/', file.core, '_inv.pdf'))
+plot.out.sp.res <- here(paste0('figures/', file.core, '_res.pdf'))
+
+## Plotting individual runs (delta)
+ggplot(filter(part.long, run %in% unique(part.long$run)[1:20]), 
+       aes(x = env.ratio, y = delta, color = run)) +
+  facet_grid(cols = vars(sp.invader), rows = vars(partition)) + 
+  geom_line(alpha = 0.7) +
+  theme_cw() +
+#  scale_color_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
+#  scale_fill_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
+  xlab ('Ratio of env 1 to env 2') +
+  ylab('Delta') +
+  theme(legend.position = 'none')
+ggsave(plot.out.sp.delta, width = 6, height = 8, units = 'in')
+
+## Plotting individual runs (resident)
+ggplot(filter(part.long, run %in% unique(part.long$run)[1:20]), 
+       aes(x = env.ratio, y = res, color = run)) +
+  facet_grid(cols = vars(sp.invader), rows = vars(partition)) + 
+  geom_line(alpha = 0.7) +
+  theme_cw() +
+#  scale_color_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
+#  scale_fill_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
+  xlab ('Ratio of env 1 to env 2') +
+  ylab('Delta') +
+  theme(legend.position = 'none')
+ggsave(plot.out.sp.res, width = 6, height = 8, units = 'in')
+
+## Plotting individual runs (invader)
+ggplot(filter(part.long, run %in% unique(part.long$run)[1:20]), 
+       aes(x = env.ratio, y = inv, color = run)) +
+  facet_grid(cols = vars(sp.invader), rows = vars(partition)) + 
+  geom_line(alpha = 0.7) +
+  theme_cw() +
+#  scale_color_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
+#  scale_fill_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
+  xlab ('Ratio of env 1 to env 2') +
+  ylab('Delta') +
+  theme(legend.position = 'none')
+ggsave(plot.out.sp.inv, width = 6, height = 8, units = 'in')
+  
+  
 # table output to latex
 # part.sum %>% 
 #   filter(env.ratio %in% c(0.0, 0.25, 0.5, 0.75, 1.0)) %>%
