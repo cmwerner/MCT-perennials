@@ -181,11 +181,11 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
   if(length(sp.invader) > 1) {
 
     n.inv.start <- 1/length(sp.invader)
-    n.old <- n.all[init.time.steps,]
+    n.old <- n.all[init.time.steps,]  ## NOTE THIS IS FROM A SINGLE TIME POINT NOT THE AVERAGE
     n.old[sp.invader] <- n.inv.start
     n.old.inv <- n.inv.start[1]
     change <- 1
-    
+
     while(change > 0.1){
       n.update <- pop_interactions(N0 = n.old, param = p.ave)
 
@@ -197,7 +197,8 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
       change <- abs(n.old.inv - n.new.inv[1])
       n.old.inv <- n.new.inv[1]
     }
-  } 
+  }
+  
   # running the resident and invader for the remaining time steps
   for (t in (init.time.steps+1):(total.time.steps-1)){
     # parameters for the varying env condition
@@ -229,23 +230,24 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     
     # figuring out starting invader population distribution if the invader is perennial
     # starting from the n.old found for average conditions above
-    if(length(sp.invader) > 1){
+     if(length(sp.invader) > 1){
       change <- 1
+      n.old[sp.resident] <- N0.together[sp.resident]
+      
       while(change > 0.01){
         n.update <- pop_interactions(N0 = n.old, param = p.env)
         n.per.total <- sum(n.update[sp.invader])
         n.update[sp.invader] <- n.update[sp.invader]/n.per.total
-        n.update[sp.resident] <- n.old[sp.resident]
-        n.old <- n.update
+        n.update[sp.resident] <- N0.together[sp.resident] # MAYBE THIS IS THE ISSUE--SHOULDN'T BE FROM AVERAGE BUT FROM THAT TIME POINT
         n.new.inv <- n.update[sp.invader]
         change <- abs(n.old.inv - n.new.inv[1])
+        n.old <- n.update
         n.old.inv <- n.new.inv[1]
       }
       N0.together[sp.invader] <- n.update[sp.invader] # using the equilibrium stage distribution from above
     } else {
       N0.together[sp.invader] <- 1 # if the invader has only one life stage
     }
-    
     
     # running one time step with the appropriate environmental parameters
     n.res.impact <- pop_interactions(N0 = N0.together, param = p.env)
@@ -441,7 +443,7 @@ pars.ave <- pars %>%
   mutate(weight = NA, treatment = 'average') %>% 
   arrange(factor(species, levels = sp.order))  # need to keep them in the right order for later
 
-for(i in 1:40){
+for(i in 1:20){
   # two equally probable environmental conditions
 env.draw <- rbinom(time.full, 1, env.ratio) 
 env.condition <- if_else(env.draw > 0, 'wet','dry')
@@ -491,16 +493,16 @@ which(abs(sp.inv.gr$gr.sp.mean) > 0.2)
 hist(sp.inv.gr$gr.sp.mean)
 
 test.1 <- filter(invade.runs, run == 1, inv == 's.p')
-test.2 <- filter(invade.runs, run == 2, inv == 's.p')
+test.2 <- filter(invade.runs, run == 3, inv == 's.p')
 plot_gr(test.1)
-ggsave(filename = 'test1_gr.pdf')
+#ggsave(filename = 'test1_gr.pdf')
 plot_gr(test.2)
-ggsave(filename = 'test2_gr.pdf')
+#ggsave(filename = 'test2_gr.pdf')
 
 plot_invasion(test.1)
-ggsave(filename = 'test1_pop.pdf')
+#ggsave(filename = 'test1_pop.pdf')
 plot_invasion(test.2)
-ggsave(filename = 'test2_pop.pdf')
+#ggsave(filename = 'test2_pop.pdf')
 
 
 
