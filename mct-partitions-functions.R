@@ -79,7 +79,6 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
   
   
   # populations with resident species not impacted by the invader
-  # NOTE would like to change this to be more general 
   
   if(pair == 'as.an'){
     n.all <- tibble(an = as.numeric(rep(NA, total.time.steps)),
@@ -94,6 +93,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
   # setting initial populations
   n.all[1,sp.resident] <- N0.r
   n.all[1,sp.invader] <- 0
+  
   
   # name of column(s) for resident species pop when impacted by invading pop
   sp.res.impact <- paste(sp.resident, 'impact', sep = '.')
@@ -133,18 +133,18 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
       p.env[,lambda.columns] <- lambda.env[,lambda.columns]
       p.env[,alpha.columns] <- alpha.env[,alpha.columns]
     }
-    
     # running one time step with the appropriate environmental parameters
     n.all[t+1,] <- pop_interactions(N0 = n.all[t,], param = p.env)
     
   }
+  
   
   # figuring out rough invader population distribution if the invader is perennial
   # using average parameters and resident population size during the final warm-up step
   # makes it faster for running in for loop
   if(length(sp.invader) > 1) {
     n.inv.start <- 1/length(sp.invader)
-    n.old <- n.all[init.time.steps,]
+    n.old <- n.all[init.time.steps,]  
     n.old[sp.invader] <- n.inv.start
     n.old.inv <- n.inv.start[1]
     change <- 1
@@ -160,7 +160,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
       change <- abs(n.old.inv - n.new.inv[1])
       n.old.inv <- n.new.inv[1]
     }
-  } 
+  }
   
   # running the resident and invader for the remaining time steps
   for (t in (init.time.steps+1):(total.time.steps-1)){
@@ -168,6 +168,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     p.env <- parameters %>% filter(treatment == env.cond[t])
     
     # adjusting non-varying or non-covarying parameters
+    
     # constant lambda
     if(vary.lambda == FALSE){
       p.env[,lambda.columns] <- p.ave[,lambda.columns]
@@ -194,21 +195,22 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     # starting from the n.old found for average conditions above
     if(length(sp.invader) > 1){
       change <- 1
+      n.old[sp.resident] <- N0.together[sp.resident]
+      
       while(change > 0.01){
         n.update <- pop_interactions(N0 = n.old, param = p.env)
         n.per.total <- sum(n.update[sp.invader])
         n.update[sp.invader] <- n.update[sp.invader]/n.per.total
-        n.update[sp.resident] <- n.old[sp.resident]
-        n.old <- n.update
+        n.update[sp.resident] <- N0.together[sp.resident] 
         n.new.inv <- n.update[sp.invader]
         change <- abs(n.old.inv - n.new.inv[1])
+        n.old <- n.update
         n.old.inv <- n.new.inv[1]
       }
       N0.together[sp.invader] <- n.update[sp.invader] # using the equilibrium stage distribution from above
     } else {
       N0.together[sp.invader] <- 1 # if the invader has only one life stage
     }
-    
     
     # running one time step with the appropriate environmental parameters
     n.res.impact <- pop_interactions(N0 = N0.together, param = p.env)

@@ -114,7 +114,6 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
   
   
   # populations with resident species not impacted by the invader
-  # NOTE would like to change this to be more general 
   
   if(pair == 'as.an'){
     n.all <- tibble(an = as.numeric(rep(NA, total.time.steps)),
@@ -179,20 +178,19 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
   # using average parameters and resident population size during the final warm-up step
   # makes it faster for running in for loop
   if(length(sp.invader) > 1) {
-
     n.inv.start <- 1/length(sp.invader)
-    n.old <- n.all[init.time.steps,]  ## NOTE THIS IS FROM A SINGLE TIME POINT NOT THE AVERAGE
+    n.old <- n.all[init.time.steps,]  
     n.old[sp.invader] <- n.inv.start
     n.old.inv <- n.inv.start[1]
     change <- 1
 
     while(change > 0.1){
       n.update <- pop_interactions(N0 = n.old, param = p.ave)
-
       n.per.total <- sum(n.update[sp.invader])
       n.update[sp.invader] <- n.update[sp.invader]/n.per.total
       n.update[sp.resident] <- n.old[sp.resident]
       n.old <- n.update
+      
       n.new.inv <- n.update[sp.invader]
       change <- abs(n.old.inv - n.new.inv[1])
       n.old.inv <- n.new.inv[1]
@@ -238,7 +236,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
         n.update <- pop_interactions(N0 = n.old, param = p.env)
         n.per.total <- sum(n.update[sp.invader])
         n.update[sp.invader] <- n.update[sp.invader]/n.per.total
-        n.update[sp.resident] <- N0.together[sp.resident] # MAYBE THIS IS THE ISSUE--SHOULDN'T BE FROM AVERAGE BUT FROM THAT TIME POINT
+        n.update[sp.resident] <- N0.together[sp.resident] 
         n.new.inv <- n.update[sp.invader]
         change <- abs(n.old.inv - n.new.inv[1])
         n.old <- n.update

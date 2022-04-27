@@ -181,11 +181,11 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
   if(length(sp.invader) > 1) {
 
     n.inv.start <- 1/length(sp.invader)
-    n.old <- n.all[init.time.steps,]
+    n.old <- n.all[init.time.steps,]  ## NOTE THIS IS FROM A SINGLE TIME POINT NOT THE AVERAGE
     n.old[sp.invader] <- n.inv.start
     n.old.inv <- n.inv.start[1]
     change <- 1
-    
+
     while(change > 0.1){
       n.update <- pop_interactions(N0 = n.old, param = p.ave)
 
@@ -197,7 +197,8 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
       change <- abs(n.old.inv - n.new.inv[1])
       n.old.inv <- n.new.inv[1]
     }
-  } 
+  }
+  
   # running the resident and invader for the remaining time steps
   for (t in (init.time.steps+1):(total.time.steps-1)){
     # parameters for the varying env condition
@@ -229,7 +230,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     
     # figuring out starting invader population distribution if the invader is perennial
     # starting from the n.old found for average conditions above
-    if(length(sp.invader) > 1){
+     if(length(sp.invader) > 1){
       change <- 1
       n.old[sp.resident] <- N0.together[sp.resident]
       
@@ -237,7 +238,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
         n.update <- pop_interactions(N0 = n.old, param = p.env)
         n.per.total <- sum(n.update[sp.invader])
         n.update[sp.invader] <- n.update[sp.invader]/n.per.total
-        n.update[sp.resident] <- N0.together[sp.resident] 
+        n.update[sp.resident] <- N0.together[sp.resident] # MAYBE THIS IS THE ISSUE--SHOULDN'T BE FROM AVERAGE BUT FROM THAT TIME POINT
         n.new.inv <- n.update[sp.invader]
         change <- abs(n.old.inv - n.new.inv[1])
         n.old <- n.update
@@ -247,7 +248,6 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     } else {
       N0.together[sp.invader] <- 1 # if the invader has only one life stage
     }
-    
     
     # running one time step with the appropriate environmental parameters
     n.res.impact <- pop_interactions(N0 = N0.together, param = p.env)
@@ -406,7 +406,7 @@ Same as above but doing multiple runs for troubleshooting
 ```{r full-multiple-runs}
 
 time.warm.up <- 20
-time.full <- 200
+time.full <- 400
 
 case <- 'p'
 
@@ -443,7 +443,7 @@ pars.ave <- pars %>%
   mutate(weight = NA, treatment = 'average') %>% 
   arrange(factor(species, levels = sp.order))  # need to keep them in the right order for later
 
-for(i in 1:40){
+for(i in 1:20){
   # two equally probable environmental conditions
 env.draw <- rbinom(time.full, 1, env.ratio) 
 env.condition <- if_else(env.draw > 0, 'wet','dry')
@@ -477,33 +477,41 @@ test <- invade.runs %>% filter(run == 1, inv == sp.1.name)
 
 sp.res.gr <- invade.runs %>% group_by(inv, res, run) %>%
   dplyr::summarise(
-    gr.sp.mean = mean(log(gr.s.p)),
-    gr.an.mean = mean(log(gr.an))
-  ) %>% filter(res == 's.p')
+    gr.sp.log.mean = mean(log(gr.s.p)),
+    gr.an.log.mean = mean(log(gr.an)),
+    gr.an.mean = mean(gr.an)
+  ) %>% filter(res == 'an')
 
-which(abs(sp.res.gr$gr.sp.mean) > 0.005)
+which(abs(sp.res.gr$gr.an.mean) > 0.003)
+hist(sp.res.gr$gr.an.mean)
+hist(sp.res.gr$gr.an.log.mean)
 
-sp.inv.gr <- invade.runs %>% group_by(inv, res, run) %>%
-  dplyr::summarise(
-    gr.sp.mean = mean(log(gr.s.p)),
-    gr.an.mean = mean(log(gr.an))
-  ) %>% filter(inv == 's.p')
-which(abs(sp.inv.gr$gr.sp.mean) > 0.2)
-
-hist(sp.inv.gr$gr.sp.mean)
+#hist(sp.inv.gr$gr.sp.mean)
 
 test.1 <- filter(invade.runs, run == 1, inv == 's.p')
 test.2 <- filter(invade.runs, run == 2, inv == 's.p')
+test.3 <- filter(invade.runs, run == 3, inv == 's.p')
+test.4 <- filter(invade.runs, run == 4, inv == 's.p')
+test.5 <- filter(invade.runs, run == 5, inv == 's.p')
+test.6 <- filter(invade.runs, run == 6, inv == 's.p')
+test.7 <- filter(invade.runs, run == 7, inv == 's.p')
 plot_gr(test.1)
-ggsave(filename = 'test1_gr.pdf')
+#ggsave(filename = 'test1_gr.pdf')
 plot_gr(test.2)
-ggsave(filename = 'test2_gr.pdf')
+#ggsave(filename = 'test2_gr.pdf')
 
 plot_invasion(test.1)
-ggsave(filename = 'test1_pop.pdf')
+#ggsave(filename = 'test1_pop.pdf')
 plot_invasion(test.2)
-ggsave(filename = 'test2_pop.pdf')
+#ggsave(filename = 'test2_pop.pdf')
 
+hist(log(test.1$gr.an), ylim = c(0, 250))
+hist(log(test.2$gr.an), ylim = c(0, 250))
+hist(log(test.3$gr.an), ylim = c(0, 250))
+hist(log(test.4$gr.an), ylim = c(0, 250))
+hist(log(test.5$gr.an), ylim = c(0, 250))
+hist(log(test.6$gr.an), ylim = c(0, 250))
+hist(log(test.7$gr.an), ylim = c(0, 250))
 
 
 ```
@@ -945,7 +953,7 @@ ggplot(part.sum, aes(x = env.ratio)) +
   xlab ('Ratio of env 1 to env 2') +
   ylab('Delta')
 
-  ggsave(plot.out.env, width = 8, height = 5, units = 'in')
+#  ggsave(plot.out.env, width = 8, height = 5, units = 'in')
 
 # plotting for just the 50-50 condition
 ggplot(filter(part.sum, env.ratio == 0.5), 
@@ -967,15 +975,15 @@ ggplot(filter(part.sum, env.ratio == 0.5),
                    name = 'Partition') +
   scale_fill_manual(values = cb_palette) +
   guides(fill = 'none')
-ggsave(plot.out.50, width = 8, height = 5, units = 'in')
+#ggsave(plot.out.50, width = 8, height = 5, units = 'in')
 
 
 # hist for the 50-50 condition
-ggplot(filter(part.long, env.ratio == 0.5, partition == 'full', sp.invader == 's.p'), 
+ggplot(filter(part.long, env.ratio == 0.5, partition == 'full', sp.invader == 'as'), 
        aes(inv)) +
   geom_histogram()
 
-ggplot(filter(part.long, env.ratio == 0.5, partition == 'full', sp.invader == 's.p'), 
+ggplot(filter(part.long, env.ratio == 0.5, partition == 'full', sp.invader == 'as'), 
        aes(res)) +
   geom_histogram()
   
@@ -1007,7 +1015,7 @@ ggplot(filter(part.long, run %in% unique(part.long$run)[1:20]),
 #  scale_color_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
 #  scale_fill_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
   xlab ('Ratio of env 1 to env 2') +
-  ylab('Delta') +
+  ylab('Res') +
   theme(legend.position = 'none')
 ggsave(plot.out.sp.res, width = 6, height = 8, units = 'in')
 
@@ -1020,7 +1028,7 @@ ggplot(filter(part.long, run %in% unique(part.long$run)[1:20]),
 #  scale_color_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
 #  scale_fill_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
   xlab ('Ratio of env 1 to env 2') +
-  ylab('Delta') +
+  ylab('Inv') +
   theme(legend.position = 'none')
 ggsave(plot.out.sp.inv, width = 6, height = 8, units = 'in')
   
