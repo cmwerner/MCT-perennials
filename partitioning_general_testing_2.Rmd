@@ -361,7 +361,7 @@ pars.ave <- pars %>%
   mutate(weight = NA, treatment = 'average') %>% 
   arrange(factor(species, levels = sp.order))  # need to keep them in the right order for later
 
-for(i in 1:10){
+for(i in 1:20){
   # two equally probable environmental conditions
 env.draw <- rbinom(time.full, 1, env.ratio) 
 env.condition <- if_else(env.draw > 0, 'wet','dry')
@@ -398,10 +398,10 @@ Loading in the file from above so we can run tests on it. One note: the longer I
 ```{r testing-trimodal}
 
 load(file = "testing_trimodal.Rdata")
+#load(file = "testing_trimodal_as.Rdata")
 
 sp.res.gr <- invade.runs %>% group_by(inv, res, run) %>%
   dplyr::summarise(
-    gr.sp.log.mean = mean(log(gr.s.p)),
     gr.an.log.mean = mean(log(gr.an)),
     gr.an.mean = mean(gr.an)
   ) %>% filter(res == 'an')
@@ -413,10 +413,11 @@ which(sp.res.gr$gr.an.log.mean < -0.004)
 
 
 # plotting options that have mean growth rates in the different groups
-# numbers would need to be changed based on above results of which is in which group
-test.1 <- filter(invade.runs, run == 1, inv == 's.p')
-test.3 <- filter(invade.runs, run == 3, inv == 's.p')
-test.11 <- filter(invade.runs, run == 11, inv == 's.p')
+# numbers would need to be changed for the an-as comparison
+# based on above results of which is in which group
+test.1 <- filter(invade.runs, run == 1, res == 'an')
+test.3 <- filter(invade.runs, run == 3, res == 'an')
+test.11 <- filter(invade.runs, run == 11, res == 'an')
 
 # plotting log growth rates -- nothing seems to be different between these different runs
 plot_gr(test.1)
@@ -451,7 +452,42 @@ mean(log(test.11[test.11$time > 200,]$gr.an)) # near 0
 # I still don't understand why it doesn't end up being uni-modal
 
 ```
+What about when the perennial species is the resident?
+```{r testing-trimodal-sp}
+load(file = "testing_trimodal.Rdata")
 
+sp.res.gr <- invade.runs %>% group_by(inv, res, run) %>%
+  dplyr::summarise(
+    gr.sp.log.mean = mean(log(gr.s.p)),
+    gr.sp.mean = mean(gr.s.p),
+  ) %>% filter(res == 's.p')
+
+hist(sp.res.gr$gr.sp.mean) # not tri-modal if we just take the means
+hist(sp.res.gr$gr.sp.log.mean) # trimodal
+
+```
+
+
+What about when the seedbanking annual is the resident?
+```{r testing-trimodal-sp}
+load(file = "testing_trimodal_as.Rdata")
+
+sp.res.gr <- invade.runs %>% group_by(inv, res, run) %>%
+  dplyr::summarise(
+    gr.as.log.mean = mean(log(gr.as)),
+    gr.as.mean = mean(gr.as),
+  ) %>% filter(res == 'as')
+
+hist(sp.res.gr$gr.as.mean) # not tri-modal if we just take the means
+hist(sp.res.gr$gr.as.log.mean) # NOT tri-modal
+
+# so what's different here? Not much more variation in the growth rates,
+# if anything there's less variation in the growth rates?
+test.1 <- filter(invade.runs, run == 1, res == 'as')
+plot_gr(test.1)
+
+
+```
 
 # NOT USED -- ISSUES ARE IN FULL RUNS, BEFORE THE PARTITION STEPS
 
