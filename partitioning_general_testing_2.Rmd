@@ -2,7 +2,7 @@
 title: "partitioning_general"
 output: html_document
 ---
-Goal is to look at the strength of the storage effect in seedbanking annual (AS) and nonseedbanking annual (AN) species interactions. We want to measure how the storage effect [and the relative strength of storage effect:relative nonlinearity] changes with 1. magnitude of envrionmental variation 2. autocorrelation of environmental variation
+Goal is to look at the strength of the storage effect in seedbanking annual (AS) and nonseedbanking annual (AN) species interactions. We want to measure how the storage effect [and the relative strength of storage effect:relative nonlinearity] changes with 1. magnitude of envrionmental variation 2. autocorrelation of environmental variation *This is the testing version to figure out what's going on with the tri-modal pattern in the resident mean log growth rates*
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -104,9 +104,11 @@ pop_interactions <- function(N0, param){
 
 ## Running models
 
-Idea is that sp.invader and sp.resident parameters can be either a single value (ex: 'a') or multiple values (ex: c('s','p'))
+Partition to run the invasion, starting with one resident species (sp.resident) running on its own for init.time.steps starting at a population size of N0.r, and then invading sp.invader in from a total population size of 1 at each of the remaining time steps up to total.time.steps. Takes in a vector env.cond of environmental conditions. Currently only supports 2 different environmental states. 
 
-*For partitions where lambda is set to not vary, also setting germination and survival terms to not vary*
+Coded so that sp.invader and sp.resident parameters can be either a single value (ex: 'a') for a species with a single life stage or multiple values (ex: c('s','p')) for a species with multiple life stages. 
+
+Has the options to vary lambda parameters with the environment (verus using the average), vary alpha parameters with the environment (versus using the average), and allowing lambda and alpha to covary (vs being sampled independently). For partitions where lambda is set to not vary, also sets germination and survival terms to not vary.
 ```{r running-invasion}
 run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
                          vary.lambda = TRUE, vary.alpha = TRUE, covary = TRUE,
@@ -283,7 +285,8 @@ Plotting function so we can visualize what's going on with the different types o
 ```{r plotting-function}
 plot_invasion <- function(df){ # plots actual population sizes
   df.long <- df %>% 
-    pivot_longer(cols = !c(time, env, inv, res, run, starts_with('gr')),
+    pivot_longer(
+      cols = !c(time, env, inv, res, run, starts_with('gr')),
                  names_to = 'species', values_to = 'n',
                  values_drop_na = TRUE) %>% 
     mutate(n.log = log(n))
@@ -316,96 +319,11 @@ plot_gr <- function(df) { # plots population growth rates
 ```
 
 # Running and plotting invasions 
-Full variation (normal run) 
-```{r normal-run}
-time.warm.up <- 20
-time.full <- 200
-
-
-case <- 'p'
-
-pair <- paste(case, 'an', sep = '.')
-
-# select the relevant parameter set
-if(pair == 'as.an') {
-  sp.1 <- 'an'
-  sp.2 <- 'as'
-  sp.order <- c('an','as') 
-  pars <- pars.as.an 
-}
-
-if(pair == 'p.an'){
-  sp.1 <- 'an'
-  sp.2 <- c('s','p')
-  sp.order <- c('an','s','p')
-  pars <- pars.p.an
-}
-  
-
-# two equally probable environmental conditions
-env.ratio <- 0.5
-env.draw <- rbinom(time.full, 1, env.ratio) 
-env.condition <- if_else(env.draw > 0, 'wet','dry')
-
-pars <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1-env.ratio))
-
-pars.ave <- pars %>% 
-    group_by(species) %>%
-    summarise_if(is.numeric,
-                 ~ weighted.mean(., weight)) %>%
-  mutate(weight = NA, treatment = 'average') %>% 
-  arrange(factor(species, levels = sp.order)) # need to keep them in the right order for later
-
-pars <- pars %>% full_join(pars.ave)
-
-invade.1.full <-  run_invasion(sp.invader = sp.1, sp.resident = sp.2, N0.r = 100, 
-                         parameters = pars, env.cond = env.condition,
-                         vary.lambda = TRUE, vary.alpha = TRUE, 
-                         init.time.steps = time.warm.up, total.time.steps = time.full) 
-
-
-invade.2.full <-  run_invasion(sp.invader = sp.2, sp.resident = sp.1,
-                               N0.r = 100, parameters = pars, env.cond = env.condition,
-                               init.time.steps = time.warm.up, total.time.steps = time.full,
-                               vary.lambda = TRUE, vary.alpha = TRUE)
-
-
-plot_invasion(filter(invade.1.full, time > time.warm.up))
-# ggsave('invasion-example-1.pdf', width = 5, height = 3, units = 'in')
-plot_gr(invade.1.full)
-# ggsave('invasion-example-2.pdf', width = 5, height = 3, units = 'in')
-
-
-plot_invasion(filter(invade.2.full, time > time.warm.up))
-# ggsave('invasion-example-3.pdf', width = 5, height = 3, units = 'in')
-plot_gr(invade.2.full)
-# ggsave('invasion-example-4.pdf', width = 5, height = 3, units = 'in')
-
-
-invade.1.long <- invade.1.full %>%
-    filter(time > time.warm.up + 1) %>% 
-    pivot_longer(cols = starts_with('gr'),
-                 names_to = 'species', names_prefix = 'gr.',
-                 values_to = 'growth.rate',
-                 values_drop_na = TRUE) %>% 
-    mutate(gr.log = log(growth.rate))
-  
-test1 <- invade.1.long %>% 
-    filter(species == sp.1.name) %>%
-    select(gr.log) %>% colMeans()
-
-test2 <- invade.1.long %>% 
-    filter(species == sp.2.name) %>%
-    select(gr.log) %>% colMeans()
-
-
-```
-
-
-Same as above but doing multiple runs for troubleshooting
+*Don't re-run this, just skip to the next step to load it*
+Full variation with multiple runs for troubleshooting (no partitioning). This saves at the end and loads at the next step so we don't have to rerun it for time. 
 ```{r full-multiple-runs}
 
-time.warm.up <- 20
+time.warm.up <- 50
 time.full <- 400
 
 case <- 'p'
@@ -443,7 +361,7 @@ pars.ave <- pars %>%
   mutate(weight = NA, treatment = 'average') %>% 
   arrange(factor(species, levels = sp.order))  # need to keep them in the right order for later
 
-for(i in 1:20){
+for(i in 1:10){
   # two equally probable environmental conditions
 env.draw <- rbinom(time.full, 1, env.ratio) 
 env.condition <- if_else(env.draw > 0, 'wet','dry')
@@ -470,10 +388,16 @@ invade.both <- bind_rows(invade.1, invade.2)
 invade.runs <- bind_rows(invade.runs, invade.both)
 }
 
-test <- invade.runs %>% filter(run == 1, inv == sp.1.name)
+# save(invade.runs, file = "testing_trimodal.Rdata")
+
+```
 
 
+Loading in the file from above so we can run tests on it. One note: the longer I run the runs for (number of time steps) the closer the two "wings" get to 0. So for 200 time steps they were around plus/minus 0.015, and with 400 time steps they're around plus/minus 0.005. On a separate test I ran each one for 1000 time steps and it's around plus/minus 0.002, but still clearly tri-modal. 
 
+```{r testing-trimodal}
+
+load(file = "testing_trimodal.Rdata")
 
 sp.res.gr <- invade.runs %>% group_by(inv, res, run) %>%
   dplyr::summarise(
@@ -482,40 +406,54 @@ sp.res.gr <- invade.runs %>% group_by(inv, res, run) %>%
     gr.an.mean = mean(gr.an)
   ) %>% filter(res == 'an')
 
-which(abs(sp.res.gr$gr.an.mean) > 0.003)
-hist(sp.res.gr$gr.an.mean)
-hist(sp.res.gr$gr.an.log.mean)
+hist(sp.res.gr$gr.an.mean) # not tri-modal if we just take the means
+hist(sp.res.gr$gr.an.log.mean) # tri-modal if we take the means of the logs
+which(sp.res.gr$gr.an.log.mean > 0.004)
+which(sp.res.gr$gr.an.log.mean < -0.004)
 
-#hist(sp.inv.gr$gr.sp.mean)
 
+# plotting options that have mean growth rates in the different groups
+# numbers would need to be changed based on above results of which is in which group
 test.1 <- filter(invade.runs, run == 1, inv == 's.p')
-test.2 <- filter(invade.runs, run == 2, inv == 's.p')
 test.3 <- filter(invade.runs, run == 3, inv == 's.p')
-test.4 <- filter(invade.runs, run == 4, inv == 's.p')
-test.5 <- filter(invade.runs, run == 5, inv == 's.p')
-test.6 <- filter(invade.runs, run == 6, inv == 's.p')
-test.7 <- filter(invade.runs, run == 7, inv == 's.p')
+test.11 <- filter(invade.runs, run == 11, inv == 's.p')
+
+# plotting log growth rates -- nothing seems to be different between these different runs
 plot_gr(test.1)
-#ggsave(filename = 'test1_gr.pdf')
-plot_gr(test.2)
-#ggsave(filename = 'test2_gr.pdf')
+plot_gr(test.3)
+plot_gr(test.11)
 
-plot_invasion(test.1)
-#ggsave(filename = 'test1_pop.pdf')
-plot_invasion(test.2)
-#ggsave(filename = 'test2_pop.pdf')
+# looking at the histograms of the growth rates (not logged) for these different ones
+# looks bi-modal when generalized but with finer breaks is actually split into
+# 4 sections. This seems to make sense matching the patterns of growth we see in the graphs
+hist(test.1$gr.an, ylim = c(0, 250), breaks = 30) 
+hist(test.3$gr.an, ylim = c(0, 250), breaks = 30)
+hist(test.11$gr.an, ylim = c(0, 250), breaks = 30)
 
-hist(log(test.1$gr.an), ylim = c(0, 250))
-hist(log(test.2$gr.an), ylim = c(0, 250))
-hist(log(test.3$gr.an), ylim = c(0, 250))
-hist(log(test.4$gr.an), ylim = c(0, 250))
-hist(log(test.5$gr.an), ylim = c(0, 250))
-hist(log(test.6$gr.an), ylim = c(0, 250))
-hist(log(test.7$gr.an), ylim = c(0, 250))
+# log growth rates within individual runs are generally tri-modal
+# although with finer breaks again it may actually be 5 sections
+hist(log(test.1$gr.an), ylim = c(0, 250), breaks = 30) 
+hist(log(test.3$gr.an), ylim = c(0, 250), breaks = 30)
+hist(log(test.11$gr.an), ylim = c(0, 250), breaks = 30)
 
+mean(log(test.1$gr.an)) # high
+mean(log(test.3$gr.an)) # near 0
+mean(log(test.11$gr.an)) # low
+
+# no clear difference between these 3 that would be causing the difference in means,
+# other than there just being more or fewer of the different growth rate groups?
+
+mean(log(test.1[test.1$time > 200,]$gr.an)) # high
+mean(log(test.3[test.3$time > 200,]$gr.an)) # low
+mean(log(test.11[test.11$time > 200,]$gr.an)) # near 0
+
+# the means change if we subset the data, with test.3 and test.11 switching groups
+# I still don't understand why it doesn't end up being uni-modal
 
 ```
 
+
+# NOT USED -- ISSUES ARE IN FULL RUNS, BEFORE THE PARTITION STEPS
 
 # Calculating partitions 
 Function to calculate partitions for a given invader and resident
