@@ -481,11 +481,11 @@ sp.res.gr <- invade.runs %>% group_by(inv, res, run) %>%
 hist(sp.res.gr$gr.as.mean) # not tri-modal if we just take the means
 hist(sp.res.gr$gr.as.log.mean) # NOT tri-modal
 
-# so what's different here? Not much more variation in the growth rates,
-# if anything there's less variation in the growth rates?
+# so what's different here? 
 test.1 <- filter(invade.runs, run == 1, res == 'as')
 plot_gr(test.1)
-
+hist(log(test.1$gr.as), ylim = c(0, 250), breaks = 0) 
+# individual time step growth rates are not multi-modal either
 
 ```
 
