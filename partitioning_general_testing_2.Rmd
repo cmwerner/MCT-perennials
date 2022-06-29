@@ -240,7 +240,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
         n.update <- pop_interactions(N0 = n.old, param = p.env)
         n.per.total <- sum(n.update[sp.invader])
         n.update[sp.invader] <- n.update[sp.invader]/n.per.total
-        n.update[sp.resident] <- N0.together[sp.resident] # MAYBE THIS IS THE ISSUE--SHOULDN'T BE FROM AVERAGE BUT FROM THAT TIME POINT
+        n.update[sp.resident] <- N0.together[sp.resident] 
         n.new.inv <- n.update[sp.invader]
         change <- abs(n.old.inv - n.new.inv[1])
         n.old <- n.update
@@ -324,7 +324,7 @@ Full variation with multiple runs for troubleshooting (no partitioning). This sa
 ```{r full-multiple-runs}
 
 time.warm.up <- 50
-time.full <- 400
+time.full <- 200
 
 case <- 'p'
 
@@ -361,7 +361,7 @@ pars.ave <- pars %>%
   mutate(weight = NA, treatment = 'average') %>% 
   arrange(factor(species, levels = sp.order))  # need to keep them in the right order for later
 
-for(i in 1:20){
+for(i in 1:12){
   # two equally probable environmental conditions
 env.draw <- rbinom(time.full, 1, env.ratio) 
 env.condition <- if_else(env.draw > 0, 'wet','dry')
@@ -397,7 +397,7 @@ Loading in the file from above so we can run tests on it. One note: the longer I
 
 ```{r testing-trimodal}
 
-load(file = "testing_trimodal.Rdata")
+#load(file = "testing_trimodal.Rdata")
 #load(file = "testing_trimodal_as.Rdata")
 
 sp.res.gr <- invade.runs %>% group_by(inv, res, run) %>%
@@ -437,9 +437,9 @@ hist(log(test.1$gr.an), ylim = c(0, 250), breaks = 30)
 hist(log(test.3$gr.an), ylim = c(0, 250), breaks = 30)
 hist(log(test.11$gr.an), ylim = c(0, 250), breaks = 30)
 
-mean(log(test.1$gr.an)) # high
-mean(log(test.3$gr.an)) # near 0
-mean(log(test.11$gr.an)) # low
+mean(log(test.1$gr.an), na.rm = TRUE) # high
+mean(log(test.3$gr.an), na.rm = TRUE) # near 0
+mean(log(test.11$gr.an), na.rm = TRUE) # low
 
 # no clear difference between these 3 that would be causing the difference in means,
 # other than there just being more or fewer of the different growth rate groups?
@@ -839,15 +839,12 @@ time.full <- 100
 # Loading in rdata file from partitions run on the computer cluster
 ```{r partition-seq}
 
-# pair <- 'as.an'
-# pair <- 'p.an'
-
 # case <- 'as'
  case <- 'p'
 
 # do only lambda/germination/survival terms vary by environment or do the alpha terms vary too?
- varying <- 'lambda'
-# varying <- 'alpha'
+# varying <- 'lambda'
+ varying <- 'alpha'
 
 # parameter settings for favorable vs unfavorable environments
 # for lambda varying the options are 'same' or 'opposite'
@@ -857,12 +854,12 @@ time.full <- 100
 # and consistent or flipped determine whether the lambda and alpha terms have similar
 # or opposing responses to the environment
 
- favorable <- 'same'
+# favorable <- 'same'
 # favorable <- 'opposite'
 # favorable <- 'same-consistent' 
 # favorable <- 'same-flipped' 
 # favorable <- 'opposite-consistent' 
-# favorable <- 'opposite-flipped'
+ favorable <- 'opposite-flipped'
 
 
 file.core <- paste0('mct-partitions_', case, '_', varying, '-', favorable)
@@ -927,7 +924,7 @@ ggplot(part.sum, aes(x = env.ratio)) +
   xlab ('Ratio of env 1 to env 2') +
   ylab('Delta')
 
-#  ggsave(plot.out.env, width = 8, height = 5, units = 'in')
+ # ggsave(plot.out.env, width = 8, height = 5, units = 'in')
 
 # plotting for just the 50-50 condition
 ggplot(filter(part.sum, env.ratio == 0.5), 
@@ -978,7 +975,7 @@ ggplot(filter(part.long, run %in% unique(part.long$run)[1:20]),
   xlab ('Ratio of env 1 to env 2') +
   ylab('Delta') +
   theme(legend.position = 'none')
-ggsave(plot.out.sp.delta, width = 6, height = 8, units = 'in')
+#ggsave(plot.out.sp.delta, width = 6, height = 8, units = 'in')
 
 ## Plotting individual runs (resident)
 ggplot(filter(part.long, run %in% unique(part.long$run)[1:20]), 
