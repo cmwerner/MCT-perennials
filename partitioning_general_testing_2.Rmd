@@ -2,6 +2,7 @@
 title: "partitioning_general"
 output: html_document
 ---
+
 Goal is to look at the strength of the storage effect in seedbanking annual (AS) and nonseedbanking annual (AN) species interactions. We want to measure how the storage effect [and the relative strength of storage effect:relative nonlinearity] changes with 1. magnitude of envrionmental variation 2. autocorrelation of environmental variation *This is the testing version to figure out what's going on with the tri-modal pattern in the resident mean log growth rates*
 
 ```{r setup, include=FALSE}
@@ -31,11 +32,12 @@ theme_cw <- function () {
 
 ## Parameters and set up
 
-This step defines which coexistence pair we're looking at, seedbanking annual with non-seedbanking annual, or perennial with non-seedbanking annual. Then sets parameters we're going to use for alpha and lambda under different environmental conditions. 
+This step defines which coexistence pair we're looking at, seedbanking annual with non-seedbanking annual, or perennial with non-seedbanking annual. Then sets parameters we're going to use for alpha and lambda under different environmental conditions.
 
 For the seedbanking annual with non-seedbanking annual interaction, uses lambda and alpha values for avena (as our AN) and erodium (as our AS) from Hallett et al. 2019 Ecology Letters paper, using the "wet" treatment as our wet environment and the "dry" treatment for our dry environment. Also going to use the seedbank parameters for as listed in that ms, which references Rice 1985, and simplifying the an to being non-seedbanking (so shifting its survival in the seed bank proportion from 0.4 to 0) *Note: planning to simplify this to be more about theoretical expectations*
 
-For the perennial with non-seedbanking annual interaction, uses the theoretical parameters. 
+For the perennial with non-seedbanking annual interaction, uses the theoretical parameters.
+
 ```{r parameters}
 
 # seedbanking annual - nonseedbanking annual parameters
@@ -48,7 +50,8 @@ pars.p.an <- read.csv(here('model-parameters/model-parameters_p_lambda-same.csv'
 
 ```
 
-Functions for one step of species interaction calculations. Trying to make it general to whether it's both species present or just one--if it's one, that population is just at 0. Takes in the full parameter df for all the species (just for one environmental condition though) and a list of species population sizes. If it's just one species running to equilibrium then it's N0 will be 0. 
+Functions for one step of species interaction calculations. Trying to make it general to whether it's both species present or just one--if it's one, that population is just at 0. Takes in the full parameter df for all the species (just for one environmental condition though) and a list of species population sizes. If it's just one species running to equilibrium then it's N0 will be 0.
+
 ```{r species-interactions}
 pop_interactions <- function(N0, param){
   
@@ -104,11 +107,12 @@ pop_interactions <- function(N0, param){
 
 ## Running models
 
-Partition to run the invasion, starting with one resident species (sp.resident) running on its own for init.time.steps starting at a population size of N0.r, and then invading sp.invader in from a total population size of 1 at each of the remaining time steps up to total.time.steps. Takes in a vector env.cond of environmental conditions. Currently only supports 2 different environmental states. 
+Partition to run the invasion, starting with one resident species (sp.resident) running on its own for init.time.steps starting at a population size of N0.r, and then invading sp.invader in from a total population size of 1 at each of the remaining time steps up to total.time.steps. Takes in a vector env.cond of environmental conditions. Currently only supports 2 different environmental states.
 
-Coded so that sp.invader and sp.resident parameters can be either a single value (ex: 'a') for a species with a single life stage or multiple values (ex: c('s','p')) for a species with multiple life stages. 
+Coded so that sp.invader and sp.resident parameters can be either a single value (ex: 'a') for a species with a single life stage or multiple values (ex: c('s','p')) for a species with multiple life stages.
 
 Has the options to vary lambda parameters with the environment (verus using the average), vary alpha parameters with the environment (versus using the average), and allowing lambda and alpha to covary (vs being sampled independently). For partitions where lambda is set to not vary, also sets germination and survival terms to not vary.
+
 ```{r running-invasion}
 run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
                          vary.lambda = TRUE, vary.alpha = TRUE, covary = TRUE,
@@ -282,6 +286,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
 ```
 
 Plotting function so we can visualize what's going on with the different types of variation
+
 ```{r plotting-function}
 plot_invasion <- function(df){ # plots actual population sizes
   df.long <- df %>% 
@@ -318,9 +323,10 @@ plot_gr <- function(df) { # plots population growth rates
 }
 ```
 
-# Running and plotting invasions 
-*Don't re-run this, just skip to the next step to load it*
-Full variation with multiple runs for troubleshooting (no partitioning). This saves at the end and loads at the next step so we don't have to rerun it for time. 
+# Running and plotting invasions
+
+*Don't re-run this, just skip to the next step to load it* Full variation with multiple runs for troubleshooting (no partitioning). This saves at the end and loads at the next step so we don't have to rerun it for time.
+
 ```{r full-multiple-runs}
 
 time.warm.up <- 50
@@ -392,8 +398,7 @@ invade.runs <- bind_rows(invade.runs, invade.both)
 
 ```
 
-
-Loading in the file from above so we can run tests on it. One note: the longer I run the runs for (number of time steps) the closer the two "wings" get to 0. So for 200 time steps they were around plus/minus 0.015, and with 400 time steps they're around plus/minus 0.005. On a separate test I ran each one for 1000 time steps and it's around plus/minus 0.002, but still clearly tri-modal. 
+Loading in the file from above so we can run tests on it. One note: the longer I run the runs for (number of time steps) the closer the two "wings" get to 0. So for 200 time steps they were around plus/minus 0.015, and with 400 time steps they're around plus/minus 0.005. On a separate test I ran each one for 1000 time steps and it's around plus/minus 0.002, but still clearly tri-modal.
 
 ```{r testing-trimodal}
 
@@ -405,6 +410,18 @@ sp.res.gr <- invade.runs %>% group_by(inv, res, run) %>%
     gr.an.log.mean = mean(log(gr.an)),
     gr.an.mean = mean(gr.an)
   ) %>% filter(res == 'an')
+
+sp.res <- invade.runs %>% filter(res == 'an')
+sp.res <- droplevels(sp.res)
+hist(sp.res$gr.an) # not tri-modal if we just take the means
+hist(log(sp.res$gr.an))
+
+sp.res.gr2 <- sp.res %>% group_by(run) %>%
+    dplyr::summarise(
+    gr.an.log.mean = mean(log(gr.an)),
+    gr.an.mean = mean(gr.an)
+  )
+  
 
 hist(sp.res.gr$gr.an.mean) # not tri-modal if we just take the means
 hist(sp.res.gr$gr.an.log.mean) # tri-modal if we take the means of the logs
@@ -427,7 +444,7 @@ plot_gr(test.11)
 # looking at the histograms of the growth rates (not logged) for these different ones
 # looks bi-modal when generalized but with finer breaks is actually split into
 # 4 sections. This seems to make sense matching the patterns of growth we see in the graphs
-hist(test.1$gr.an, ylim = c(0, 250), breaks = 30) 
+hist(test.1$gr.an, ylim = c(0, 250), breaks = seq(0,8, by=0.125)) 
 hist(test.3$gr.an, ylim = c(0, 250), breaks = 30)
 hist(test.11$gr.an, ylim = c(0, 250), breaks = 30)
 
@@ -452,7 +469,156 @@ mean(log(test.11[test.11$time > 200,]$gr.an)) # near 0
 # I still don't understand why it doesn't end up being uni-modal
 
 ```
+
+Is this because of within run structure? What if we permute run labels?
+
+```{r permuting labels}
+
+#load(file = "testing_trimodal.Rdata")
+sp.res <- invade.runs %>% filter(res == 'an')
+sp.res <- droplevels(sp.res)
+fakeruns <- sample(20, 6980, replace=TRUE)
+sp.res <- cbind(sp.res, fakeruns)
+
+hist(sp.res$gr.an) # not tri-modal if we just take the means
+hist(log(sp.res$gr.an))
+
+sp.res.gr2 <- sp.res %>% group_by(fakeruns) %>%
+    dplyr::summarise(
+    gr.an.log.mean = mean(log(gr.an)),
+    gr.an.mean = mean(gr.an)
+  )
+  
+
+hist(sp.res.gr2$gr.an.mean) # not tri-modal if we just take the means
+hist(sp.res.gr$gr.an.log.mean) # NOT tri-modal if we permute the labels
+which(sp.res.gr$gr.an.log.mean > 0.004)
+which(sp.res.gr$gr.an.log.mean < -0.004)
+
+xx <- acf(test.1$gr.an) # strong lag-1 negative correlation
+acf(test.11$gr.an)
+
+# if we break this, I'll bet we don't get the autocorrelation
+gr.ex <- sample(sp.res$gr.an, 6980, replace=FALSE)
+fake.data <- data.frame(gr.ex, sp.res$run, sp.res$time)
+colnames(fake.data) <- c("gr.an", "run", "time")
+
+fake.test.1 <- filter(fake.data, run == 1)
+fake.test.3 <- filter(fake.data, run == 3)
+fake.test.11 <- filter(fake.data, run == 11)
+
+fake.xx <- acf(fake.test.1$gr.an) # strong lag-1 negative correlation
+acf(fake.test.11$gr.an)
+
+sp.res.gr3 <- fake.data  %>% group_by(run) %>%
+    dplyr::summarise(
+    gr.an.log.mean = mean(log(gr.an)),
+    gr.an.mean = mean(gr.an)
+  )
+
+hist(sp.res.gr3$gr.an.mean) # not tri-modal if we just take the means
+hist(sp.res.gr3$gr.an.log.mean)
+
+```
+
+Ok, so it seems to be something about model and the timeseries structure. I want to dive into that a little bit more...
+
+```{r environmental dive}
+env.series <- rep(NA, dim(sp.res)[1])
+counter <- 1
+
+for (xx in 1:20) {
+  tempdata <- filter(sp.res, run == xx)
+  counter <- counter + 1 # counting for the first timepoint per run
+  for (yy in 2:dim(tempdata)[1]) {
+    env.series [counter] <- paste(tempdata$env[yy-1], 
+                                  tempdata$env[yy], sep ="_")
+    counter <- counter + 1
+  }
+}
+
+sp.res.env <- cbind(sp.res, env.series)
+
+# there are all about the same, which is correct and makes sense
+# so why is there this neg. ar(1) autocorrelation?
+length(which(sp.res.env$env.series == "dry_wet"))
+length(which(sp.res.env$env.series == "dry_dry"))
+length(which(sp.res.env$env.series == "wet_wet"))
+length(which(sp.res.env$env.series == "wet_dry"))
+
+dry_wet <- filter(sp.res.env, env.series == "dry_wet")
+hist(dry_wet$gr.an) # hmm, that's bimodal
+
+wet_wet <- filter(sp.res.env, env.series == "wet_wet")
+hist(wet_wet$gr.an) # hmm, that's trimodal?...
+
+wet_dry <- filter(sp.res.env, env.series == "wet_dry")
+hist(wet_dry$gr.an) # hmm, that's also trimodal. Looks almost identical to above
+
+dry_dry <- filter(sp.res.env, env.series == "dry_dry")
+hist(dry_dry$gr.an) # hmm, that's bimodal. Looks a ton like dry_wet
+
+# Does it depend on the last 3 conditions?...
+env.series.long <- rep(NA, dim(sp.res)[1])
+counter <- 1
+
+for (xx in 1:20) {
+  tempdata <- filter(sp.res, run == xx)
+  counter <- counter + 2 # counting for the first timepoint per run
+  for (yy in 3:dim(tempdata)[1]) {
+    env.series.long [counter] <- paste(tempdata$env[yy-2],
+                                  tempdata$env[yy-1], 
+                                  tempdata$env[yy], sep ="_")
+    counter <- counter + 1
+  }
+}
+
+sp.res.env.long <- cbind(sp.res.env, env.series.long)
+
+# these should all be about 870ish long
+# looks good
+ggplot(sp.res.env.long) +
+  geom_bar(aes(as.factor(env.series.long)))
+
+wet_dry_dry <- filter(sp.res.env.long, env.series.long == "wet_dry_dry")
+hist(wet_dry_dry$gr.an) # bimodal, but all between .12 and .16
+
+wet_dry_wet <- filter(sp.res.env.long, env.series.long == "wet_dry_wet")
+hist(wet_dry_wet$gr.an) # bimodal, but all between .12 and .16
+
+wet_wet_wet <- filter(sp.res.env.long, env.series.long == "wet_wet_wet")
+hist(wet_wet_wet$gr.an) # all close to 1 (range 1-1.28)
+
+wet_wet_dry <- filter(sp.res.env.long, env.series.long == "wet_wet_dry")
+hist(wet_wet_dry$gr.an) # all close to 1 (range 1-1.28)
+
+dry_dry_dry <- filter(sp.res.env.long, env.series.long == "dry_dry_dry")
+hist(dry_dry_dry$gr.an) # all close to 1 (range .8-1)
+
+dry_dry_wet <- filter(sp.res.env.long, env.series.long == "dry_dry_wet")
+hist(dry_dry_wet$gr.an) # all close to 1 (range .8-1)
+
+dry_wet_wet <- filter(sp.res.env.long, env.series.long == "dry_wet_wet")
+hist(dry_wet_wet$gr.an) # all high and trimodal (range 6.5-8)
+
+dry_wet_dry <- filter(sp.res.env.long, env.series.long == "dry_wet_dry")
+hist(dry_wet_dry$gr.an) # all high and trimodal (range 6.5-8)
+
+# it seems like y-2 and y-1 matter for determining growth rate
+# so let's plot that coloring by y-2 and y-1
+# this was probably all we needed to do, not all the stuff above
+# oh well...
+ggplot(sp.res.env.long) +
+  geom_histogram(aes(gr.an, fill=as.factor(env.series.long), aes=0.5))
+
+
+  
+
+```
+
+
 What about when the perennial species is the resident?
+
 ```{r testing-trimodal-sp}
 load(file = "testing_trimodal.Rdata")
 
@@ -467,8 +633,8 @@ hist(sp.res.gr$gr.sp.log.mean) # trimodal
 
 ```
 
-
 What about when the seedbanking annual is the resident?
+
 ```{r testing-trimodal-sp}
 load(file = "testing_trimodal_as.Rdata")
 
@@ -491,8 +657,10 @@ hist(log(test.1$gr.as), ylim = c(0, 250), breaks = 0)
 
 # NOT USED -- ISSUES ARE IN FULL RUNS, BEFORE THE PARTITION STEPS
 
-# Calculating partitions 
+# Calculating partitions
+
 Function to calculate partitions for a given invader and resident
+
 ```{r partition-function}
 partition_epsilons <- function(sp.inv, sp.res, pars, 
                                env.condition, time.warm.up, time.full){
@@ -622,6 +790,7 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
 ```
 
 Running that partition function *This would get split into a separate script to run on Teton computing cluster*
+
 ```{r partition-run}
 
 # CHOOSE: This determines which coexistence pair we're looking at
@@ -742,6 +911,7 @@ ggplot(partitions, aes(x = partition, y = delta, fill = partition)) +
 ```
 
 Not used: Running over an environmental sequence instead of a particular env.ratio. This was used for testing before running on the computer cluster
+
 ```{r env-seq}
 # This determines which coexistence pair we're looking at
 pair <- 'as.an'
@@ -835,8 +1005,8 @@ time.full <- 100
 
 ```
 
-
 # Loading in rdata file from partitions run on the computer cluster
+
 ```{r partition-seq}
 
 # case <- 'as'
@@ -1012,4 +1182,3 @@ ggsave(plot.out.sp.inv, width = 6, height = 8, units = 'in')
 #   print(., include.rownames = FALSE)
 
 ```
-
