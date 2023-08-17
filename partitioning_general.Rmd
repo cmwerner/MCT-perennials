@@ -9,6 +9,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(xtable)
 library(here)
+library(patchwork)
 
 ## Personal ggplot theme
 theme_cw <- function () { 
@@ -402,7 +403,7 @@ test2 <- invade.1.long %>%
 ```
 
 
-Same as above but doing multiple runs for troubleshooting
+* DON'T RUN THIS * Same as above but doing multiple runs for troubleshooting
 ```{r full-multiple-runs}
 
 time.warm.up <- 20
@@ -660,27 +661,29 @@ favorable <- 'same'
 # file names
 
 file.core <- paste0(case, '_', varying, '-', favorable)
-main.wd <- '/project/coexistence/cwerner5/'  # needs to be updated
+#main.wd <- '/project/coexistence/cwerner5/'  # needs to be updated
+main.wd <- './'
 
 file.in <- paste0(main.wd, 'model-parameters/model-parameters_', file.core, '.csv')
 
 file.out <- paste0(main.wd, 'model-data/mct-partitions_', file.core, '.RData')
 
 # SET PARAMETER VALUES 
-pars <- read.csv(file.in) %>% # THIS NEEDS TO BE GENERALIZED
-  mutate(stem.surv = NULL) 
+pars <- read.csv(file.in) 
 
 
 # select the relevant parameter set
 if(pair == 'as.an') {
   sp.1 <- 'an'
   sp.2 <- 'as'
-  sp.order <- c('an','as') 
+  sp.order <- c('an','as')
+pars <- pars %>% mutate(stem.surv = NULL) 
 }
 if(pair == 'p.an'){
   sp.1 <- 'an'
   sp.2 <- c('s','p')
   sp.order <- c('an','s','p')
+pars <- pars %>% mutate(seed.surv = NULL)
 }
 
 env.ratio <- 0.5 # ratio of wet years to dry years
@@ -857,15 +860,13 @@ time.full <- 100
 # Loading in rdata file from partitions run on the computer cluster
 ```{r partition-seq}
 
-# pair <- 'as.an'
-# pair <- 'p.an'
 
 # case <- 'as'
  case <- 'p'
 
 # do only lambda/germination/survival terms vary by environment or do the alpha terms vary too?
- varying <- 'lambda'
-# varying <- 'alpha'
+# varying <- 'lambda'
+ varying <- 'alpha'
 
 # parameter settings for favorable vs unfavorable environments
 # for lambda varying the options are 'same' or 'opposite'
@@ -875,10 +876,10 @@ time.full <- 100
 # and consistent or flipped determine whether the lambda and alpha terms have similar
 # or opposing responses to the environment
 
- favorable <- 'same'
+# favorable <- 'same'
 # favorable <- 'opposite'
 # favorable <- 'same-consistent' 
-# favorable <- 'same-flipped' 
+ favorable <- 'same-flipped' 
 # favorable <- 'opposite-consistent' 
 # favorable <- 'opposite-flipped'
 
@@ -887,6 +888,8 @@ file.core <- paste0('mct-partitions_', case, '_', varying, '-', favorable)
 
 load(here(paste0('model-data/', file.core, '.RData')))
 plot.out.env <- here(paste0('figures/', file.core, '_env-ratio.pdf')) 
+plot.out.env.inv <- here(paste0('figures/', file.core, '_env-ratio_inv.pdf')) 
+plot.out.env.res <- here(paste0('figures/', file.core, '_env-ratio_res.pdf')) 
 plot.out.50 <- here(paste0('figures/', file.core, '_50.pdf'))
 
 # Load data and set titles for invasion interactions
@@ -907,7 +910,8 @@ if(case == 'p'){
 part.long <- simulations %>% map_dfr(bind_rows, .id = "run") %>%
   mutate(partition = factor(partition, 
                             levels = c('full','e0','el','ea','eint',
-                                       'storage','nocov')))
+                                       'storage','nocov'))) %>%
+  filter(!partition == 'eint')
 
 part.sum <- part.long %>% 
   group_by(sp.invader, sp.resident, partition, env.ratio) %>%
@@ -924,17 +928,18 @@ partition.legend <- c(
   'e0' = expression(Delta^0), 
   'el' = expression(Delta^lambda), 
   'ea' = expression(Delta^alpha),
-  'eint' = expression(Delta^{alpha*lambda}),
+#  'eint' = expression(Delta^{alpha*lambda}),
   'storage' = expression(Delta^(alpha*lambda)), 
   'nocov' = expression(Delta^{alpha!=lambda})
 )
 
-cb_palette <- c("black", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00")
+#cb_palette <- c("black", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00")
+#cb_palette <- c("black", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00")
+cb_palette <- c("black", "#009E73", "#56B4E9", "#E69F00","#D55E00","#0072B2")
 
-# plotting across the ratio of environmental conditions
-ggplot(part.sum, aes(x = env.ratio)) +
-  facet_grid(cols = vars(sp.invader),
-             labeller = labeller(sp.invader = species_names)) + 
+
+# uncombining invader vs resident subfigs for now
+ggplot(filter(part.sum, sp.invader == "s.p"), aes(x = env.ratio)) +
   geom_ribbon(alpha = 0.3, aes(ymin = delta.mean - delta.sd, 
                                ymax = delta.mean + delta.sd,
                                fill = partition)) +
@@ -943,7 +948,38 @@ ggplot(part.sum, aes(x = env.ratio)) +
   scale_color_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
   scale_fill_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
   xlab ('Ratio of env 1 to env 2') +
-  ylab('Delta')
+  ylab('Partitioning of low density growth rate')
+
+  ggsave(plot.out.env.inv, width = 5, height = 5, units = 'in')
+  
+  ggplot(filter(part.sum, sp.invader == 'an'), aes(x = env.ratio)) +
+  geom_ribbon(alpha = 0.3, aes(ymin = delta.mean - delta.sd, 
+                               ymax = delta.mean + delta.sd,
+                               fill = partition)) +
+  geom_line(aes(y = delta.mean, color = partition)) +
+  theme_cw() +
+  scale_color_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
+  scale_fill_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
+  xlab ('Ratio of env 1 to env 2') +
+  ylab('Partitioning of low density growth rate')
+
+  ggsave(plot.out.env.res, width = 5, height = 5, units = 'in')
+
+
+# plotting across the ratio of environmental conditions
+ggplot(part.sum, aes(x = env.ratio)) +
+  facet_grid(cols = vars(sp.invader),
+             labeller = labeller(sp.invader = species_names),
+             scales = "free_y") + 
+  geom_ribbon(alpha = 0.3, aes(ymin = delta.mean - delta.sd, 
+                               ymax = delta.mean + delta.sd,
+                               fill = partition)) +
+  geom_line(aes(y = delta.mean, color = partition)) +
+  theme_cw() +
+  scale_color_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
+  scale_fill_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
+  xlab ('Ratio of env 1 to env 2') +
+  ylab('Partitioning of low density growth rate')
 
   ggsave(plot.out.env, width = 8, height = 5, units = 'in')
 
@@ -961,7 +997,7 @@ ggplot(filter(part.sum, env.ratio == 0.5),
   ylab('Partitioning of growth rate when rare') +
   scale_x_discrete(labels = c('full' = 'Full',  'e0' = expression(Delta^0),
                               'el' = expression(Delta^lambda), 'ea' = expression(Delta^alpha),
-                              'eint' = expression(Delta^{alpha*lambda}),
+                             # 'eint' = expression(Delta^{alpha*lambda}),
                               'storage' = expression(Delta^(alpha*lambda)), 
                               'nocov' = expression(Delta^{alpha!=lambda})),
                    name = 'Partition') +
@@ -1034,3 +1070,250 @@ ggsave(plot.out.sp.inv, width = 6, height = 8, units = 'in')
 
 ```
 
+## New plotting functions to generate our final figures
+Using the data from the file run on the computer cluster
+```{r partition-plots-Figure-2}
+
+# nested for loops is fine, function would probably be a little cleaner
+part.sum.all <- tibble()
+for(favorable in c('opposite-consistent', 'same-consistent', 'same-flipped')){
+  for(case in c('p', 'as')){
+    varying <- 'alpha'
+    
+    
+    file.core <- paste0('mct-partitions_', case, '_', varying, '-', favorable)
+    load(here(paste0('model-data/', file.core, '.RData')))
+    
+    # summary of the partition results
+    part.long <- simulations %>% map_dfr(bind_rows, .id = "run") %>%
+      mutate(partition = factor(partition, 
+                                levels = c('full','e0','el','ea','eint',
+                                           'storage','nocov')))
+    
+    part.sum <- part.long %>% 
+      group_by(sp.invader, sp.resident, partition, env.ratio) %>%
+      dplyr::summarise(
+        inv.mean = mean(inv),
+        res.mean = mean(res),
+        delta.mean = mean(delta),
+        inv.sd = sd(inv),
+        res.sd = sd(res),
+        delta.sd = sd(delta) # want to switch this to CI approach?
+      ) %>% add_column(env.case = sub('-','.',favorable))
+    
+    part.sum.all <- part.sum.all %>% bind_rows(part.sum)
+  }
+}
+
+
+part.sum.all$sp.invader <- factor(part.sum.all$sp.invader, 
+                                  levels = c("s.p", "as", "an") )
+
+part.sum.all$sp.resident <- factor(part.sum.all$sp.resident, 
+                                  levels = c("s.p", "as", "an") )
+
+part.sum.all$env.case <- factor(part.sum.all$env.case, 
+                                  levels = c("opposite.consistent", "same.flipped", "same.consistent") )
+
+# graph by proportion of env intrinsically favorable to our focal species
+# (perennial or seedbanking annual) -- in the original parameter lists
+# these were the ones that switched with the different scenarios
+part.sum.all <- part.sum.all %>% 
+  mutate(
+    proportion.favorable = ifelse(env.case == "opposite.consistent", 1 - part.sum.all$env.ratio, part.sum.all$env.ratio)
+  ) 
+
+
+
+
+### plot stuff------
+
+partition.legend <- c(
+  'full' = 'Full',  
+  'e0' = expression(Delta^0), 
+  'el' = expression(Delta^lambda), 
+  'ea' = expression(Delta^alpha),
+  'eint' = expression(Delta^{alpha*lambda}),
+  'storage' = expression(Delta^(alpha*lambda)), 
+  'nocov' = expression(Delta^{alpha!=lambda})
+)
+
+
+cb_palette <- c("black", "#009E73", "#56B4E9", "#E69F00", "darkorchid4")
+cb_palette_long <- c("black", "#009E73", "#56B4E9", "#E69F00", "darkorchid4",
+                            "#D55E00", "#0072B2")
+
+environmental_condition <- as_labeller(c(
+  opposite.consistent = "Opposite env favorable",
+  same.consistent = "Same env favorable \n competition stronger",
+  same.flipped = "Same env favorable \n competition weaker",
+  s.p = "Invader: Perennial \n Resident: Nonseedbanking Annual",
+  as = "Invader: Seedbanking Annual \n Resident: Nonseedbanking Annual"
+), )
+# 
+# # Figure 2 barchart showing strength of partitions at 50-50 env
+# # with the perennial as the invader
+# part.sum.50.p <- part.sum.all %>% filter(sp.invader == 's.p', env.ratio == 0.5,
+#                                        env.case == 'same.flipped')
+# part.sum.50.as <- part.sum.all %>% filter(sp.invader == 'as', env.ratio == 0.5,
+#                                        env.case == 'same.flipped')
+# 
+# plot.50.p <- part.sum.50.p %>% 
+#   ggplot(aes(x = partition, fill = partition, y = delta.mean,
+#                            ymin = delta.mean - delta.sd, ymax = delta.mean + delta.sd)) +
+#   geom_col() +
+#   geom_errorbar(width = 0.2, col= 'grey30') +
+#   annotate("segment", x = 1.5, xend = 1.5, y = -0.17, yend = 0.42, colour = 'grey50') +
+#   annotate("segment", x = 5.5, xend = 5.5, y = -0.17, yend = 0.42, colour = 'grey50') +
+#   annotate("rect", xmin = 5.5, xmax = 7.65, ymin = -0.17, ymax = 0.42,
+#   alpha = .2) +
+#   coord_cartesian(ylim = c(-0.05, 0.4)) +
+#   scale_fill_manual(values = cb_palette_long, labels = partition.legend, name = 'Partition') +
+#   scale_x_discrete(labels = partition.legend) +
+#   theme_cw() +
+#     guides(fill = "none") +
+#   theme(axis.text.x = element_text(size = 16),
+#         plot.title = element_text(hjust = 0.5)) +
+#   xlab('Partition') +
+#   ylab('Partitioning of low density growth rate') +
+#   ggtitle('Invader: Perennial \n Resident: Nonseedbanking Annual')
+# 
+# plot.50.as <- part.sum.50.as %>% 
+#   ggplot(aes(x = partition, fill = partition, y = delta.mean,
+#                            ymin = delta.mean - delta.sd, ymax = delta.mean + delta.sd)) +
+#   geom_col() +
+#   geom_errorbar(width = 0.2, col= 'grey30') +
+#   annotate("segment", x = 1.5, xend = 1.5, y = -0.18, yend = 0.8, colour = 'grey50') +
+#   annotate("segment", x = 5.5, xend = 5.5, y = -0.18, yend = 0.8, colour = 'grey50') +
+#   annotate("rect", xmin = 5.5, xmax = 7.65, ymin = -0.18, ymax = 0.8,
+#   alpha = .2) +
+#   coord_cartesian(ylim = c(-0.05, 0.75)) +
+#   scale_fill_manual(values = cb_palette_long, labels = partition.legend, name = 'Partition') +
+#   scale_x_discrete(labels = partition.legend) +
+#   theme_cw() +
+#     guides(fill = "none") +
+#   theme(axis.text.x = element_text(size = 16),
+#         plot.title = element_text(hjust = 0.5)) +
+#   xlab('Partition') +
+#   ylab('') +
+#   ggtitle('Invader: Seedbanking Annual \n Resident: Nonseedbanking Annual')
+# 
+# plot.50.p + plot.50.as
+
+# ggsave('mct-partitions_figure-2.pdf', width = 8, height = 5, units = 'in')
+
+# Figure 2: across environmental conditions, perennial and seedbanking annual as the invaders, non-seedbanking annual as the resident
+part.sum.inv <- part.sum.all %>% 
+  filter(sp.resident == 'an', 
+         partition %in% c('full', 'e0', 'el', 'ea', 'eint'))
+
+
+part.sum.inv %>% ggplot(aes(x = proportion.favorable)) +
+  facet_grid(rows = vars(env.case), cols = vars(sp.invader), scales = "free",
+             labeller = environmental_condition) +
+  geom_ribbon(alpha = 0.3, aes(ymin = delta.mean - delta.sd, 
+                               ymax = delta.mean + delta.sd,
+                               fill = partition)) +
+  geom_line(aes(y = delta.mean, color = partition)) +
+  theme_cw() +
+  theme(strip.text = element_text(size = 13),
+        legend.position = c(0.05, 0.93),
+        legend.text.align = 0) +
+  scale_color_manual(values = cb_palette, labels = partition.legend, name = '') +
+  scale_fill_manual(values = cb_palette, labels = partition.legend, name = '') +
+  xlab ('Frequency of environment favorable for focal species\' density-independent growth') +
+  ylab('Partitioning of low density growth rate')
+
+# ggsave('mct-partitions_figure-3.pdf', width = 8.5, height = 8.5, units = 'in')
+
+# Figure 3: across environmental conditions, perennial and seedbanking annual as the resident, non-seedbanking annual as the invader
+part.sum.res <- part.sum.all %>% 
+  filter(sp.invader == 'an', 
+         partition %in% c('full', 'e0', 'el', 'ea', 'eint'))
+
+environmental_condition <- as_labeller(c(
+  opposite.consistent = "Opposite env favorable",
+  same.consistent = "Same env favorable \n competition stronger",
+  same.flipped = "Same env favorable \n competition weaker",
+  s.p = "Invader: Nonseedbanking Annual \n Resident: Perennial",
+  as = "Invader: Nonseedbanking Annual \n Resident: Seedbanking Annual"
+), )
+
+part.sum.res %>% ggplot(aes(x = proportion.favorable)) +
+  facet_grid(rows = vars(env.case), cols = vars(sp.resident), scales = "free",
+             labeller = environmental_condition) +
+  geom_ribbon(alpha = 0.3, aes(ymin = delta.mean - delta.sd, 
+                               ymax = delta.mean + delta.sd,
+                               fill = partition)) +
+  geom_line(aes(y = delta.mean, color = partition)) +
+  theme_cw() +
+  theme(strip.text = element_text(size = 13),
+        legend.position = c(0.93, 0.93),
+        legend.text.align = 0) +
+  scale_color_manual(values = cb_palette, labels = partition.legend, name = '') +
+  scale_fill_manual(values = cb_palette, labels = partition.legend, name = '') +
+  xlab('Frequency of environment favorable for focal species\' density-independent growth') +
+  ylab('Partitioning of low density growth rate')
+
+# ggsave('mct-partitions_figure-4.pdf', width = 8.5, height = 8.5, units = 'in')
+
+
+```
+
+```{r supplemental-figure}
+# Supplemental figure matching figure 2
+# With the additional partitions full, interaction effect, and additional partition
+ 
+ part.sum.supp.2 <- part.sum.all %>% 
+  filter(sp.resident == 'an',
+         partition %in% c('full', 'eint', 'storage', 'nocov'))
+ 
+ cb_palette_int <- c("black",  "darkorchid4", "#D55E00", "#0072B2")
+
+part.sum.supp.2 %>% ggplot(aes(x = proportion.favorable)) +
+  facet_grid(rows = vars(env.case), cols = vars(sp.invader), scales = "free",
+             labeller = environmental_condition) +
+  geom_ribbon(alpha = 0.3, aes(ymin = delta.mean - delta.sd, 
+                               ymax = delta.mean + delta.sd,
+                               fill = partition)) +
+  geom_line(aes(y = delta.mean, color = partition)) +
+  theme_cw() +
+  theme(strip.text = element_text(size = 13),
+        legend.position = c(0.05, 0.9),
+        legend.text.align = 0) +
+  scale_color_manual(values = cb_palette_int, labels = partition.legend, name = '') +
+  scale_fill_manual(values = cb_palette_int, labels = partition.legend, name = '') +
+  xlab ('Frequency of environment favorable for focal species\' density-independent growth') +
+  ylab('Partitioning of low density growth rate')
+
+# ggsave('mct-partitions_figure-supp-2.pdf', width = 8.5, height = 8.5, units = 'in')
+ 
+ # Supplemental figure matching figure 2
+# With the additional partitions full, interaction effect, and additional partition
+ 
+ part.sum.supp.3 <- part.sum.all %>% 
+  filter(sp.invader == 'an',
+         partition %in% c('full', 'eint', 'storage', 'nocov'))
+ 
+ cb_palette_int <- c("black",  "darkorchid4", "#D55E00", "#0072B2")
+
+part.sum.supp.3 %>% ggplot(aes(x = proportion.favorable)) +
+  facet_grid(rows = vars(env.case), cols = vars(sp.resident), scales = "free",
+             labeller = environmental_condition) +
+  geom_ribbon(alpha = 0.3, aes(ymin = delta.mean - delta.sd, 
+                               ymax = delta.mean + delta.sd,
+                               fill = partition)) +
+  geom_line(aes(y = delta.mean, color = partition)) +
+  theme_cw() +
+  theme(strip.text = element_text(size = 13),
+        legend.position = c(0.45, 0.93),
+        legend.text.align = 0) +
+  scale_color_manual(values = cb_palette_int, labels = partition.legend, name = '') +
+  scale_fill_manual(values = cb_palette_int, labels = partition.legend, name = '') +
+  xlab ('Frequency of environment favorable for focal species\' density-independent growth') +
+  ylab('Partitioning of low density growth rate')
+
+ ggsave('mct-partitions_figure-supp-3.pdf', width = 8.5, height = 8.5, units = 'in')
+
+
+```
