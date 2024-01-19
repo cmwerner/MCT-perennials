@@ -104,18 +104,8 @@ pop_interactions <- function(N0, param){
 
 Function to run one time series, first with sp.resident alone for init.time.steps alone starting from population size N0.r. Then the invader species is added in at each time step at low density from init.time.steps to total.time.steps. Parameter names sp.invader and sp.resident can be either a single value (ex: 'a') or multiple values (ex: c('s','p')) to accommodate stage-structured species.
 
-For partitions where lambda is set to not vary, also sets germination and survival terms to not vary
-
-*Edits -- changing this to do all the different partitions at each time step. Warm-up time is unchanged, only doing the partitions in the main time. Going to start by just doing the full run with the changed data frame set up and make sure that still works*
-
-All the column names are based on the actual species names
-
-This function will return a dataframe with columns: time, env.cond, r.full.no.i, r.full.with.i, i.full, r.none, i.none, r.no.lambda, i.no.lambda, r.no.alpha, i.no.alpha
-The next section of the code can use this to calculate growth rates and average across the time series. 
-*except maybe not quite because right now we're using separate an/as/s/p columns? so should we do that too? is it useful to keep s and p separate if we're just combining them back together later?*
-
-```{r running-invasion}
-
+This function runs with all parameters varying. All the column names are based on the actual species names.
+```{r running-full}
 perennial_distribution <- function(change.limit = 0.01, n.old = N0.together, 
                                    p.env = p.env, sp.resident, sp.invader) {
       n.old.inv <- n.old[sp.invader]
@@ -140,23 +130,10 @@ perennial_distribution <- function(change.limit = 0.01, n.old = N0.together,
 }
 
 
-run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
-                        # vary.lambda = TRUE, vary.alpha = TRUE, covary = TRUE,
+# First run with all parameters varying. This is where stage structure distribution is calculated
+# and this what is used for all the following non-varying runs
+run_full <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
                          init.time.steps = 50, total.time.steps = 100) {
-  
-  # tibble for output
-  partition.runs.output <- tibble(time = 1:total.time.steps,
-                                  env.cond, 
-                                  r.full.no.i = (rep(NA, total.time.steps)),  # this will be the only one with data for the warm-up period
-                                  r.full.with.i = (rep(NA, total.time.steps)),
-                                  i.full = (rep(NA, total.time.steps)),
-                                  r.none = (rep(NA, total.time.steps)),
-                                  i.none = (rep(NA, total.time.steps)),
-                                  r.no.lambda = (rep(NA, total.time.steps)),
-                                  i.no.lambda = (rep(NA, total.time.steps)),
-                                  r.no.alpha = (rep(NA, total.time.steps)),
-                                  i.no.alpha = (rep(NA, total.time.steps)))
-  
   
   # populations with resident species not impacted by the invader
   if(pair == 'as.an'){
@@ -173,60 +150,19 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
   n.all[1,sp.resident] <- N0.r
   n.all[1,sp.invader] <- 0
   
-  # first row in tibble output
-  partition.runs.output[1,'r.full.no.i'] <- sum(N0.r)
-  
-  
   # name of column(s) for resident species pop when impacted by invading pop
   sp.res.impact <- paste(sp.resident, 'impact', sep = '.')
-  
-  # parameters for the average env condition
-  p.ave <- parameters %>% filter(treatment == 'average')
-  
-  # columns used for the non-varying parameters
-  alpha.columns <- c(paste('a', sp.invader, sep = '.'), 
-                     paste('a', sp.resident, sep = '.'))
-  lambda.columns <- parameters %>% 
-    select(!c(all_of(alpha.columns),'species','treatment')) %>% 
-    names()
-  
-  # environmental condition vectors for the no covariance option
-  env.lambda <- sample(env.cond, size = length(env.cond), replace = FALSE)
-  env.alpha <- sample(env.cond, size = length(env.cond), replace = FALSE)
-  
-  
-  # CHECK: Warm up only for full run, because partitions happen at each of the post-warm-up time steps?
+  # names of column(s) for invader stage distribution
+  sp.inv.dist <- paste(sp.invader, 'dist', sep = '.')
   
   for(t in 1:init.time.steps){
-    # parameters for the varying env condition -- this is the only one we use for the warm-up
+    # parameters all varying
     p.env <- parameters %>% filter(treatment == env.cond[t])
     
-    # # constant lambda
-    # if(vary.lambda == FALSE){
-    #   p.env[,lambda.columns] <- p.ave[,lambda.columns]
-    # }
-    # 
-    # # constant alpha
-    # if(vary.alpha == FALSE){
-    #   p.env[,alpha.columns] <- p.ave[,alpha.columns]
-    # }
-    # 
-    # # parameters for no covariance between alpha and lambda
-    # if(covary == FALSE){
-    #   lambda.env  <- parameters %>% filter(treatment == env.lambda[t])
-    #   alpha.env <- parameters %>% filter(treatment == env.alpha[t])
-    #   p.env[,lambda.columns] <- lambda.env[,lambda.columns]
-    #   p.env[,alpha.columns] <- alpha.env[,alpha.columns]
-    # }
     # running one time step with the appropriate environmental parameters
     n.all[t+1,] <- pop_interactions(N0 = n.all[t,], param = p.env)
     
-    # save resident population size in output tibble
-    # sum in case it's a multi-stage population for full population size
-    partition.runs.output[t+1,'r.full.no.i'] <- sum(n.all[t+1,sp.resident])
-    
   }
-  
   
   # figuring out rough invader population distribution if the invader is perennial
   # using average parameters and resident population size during the final warm-up step
@@ -240,38 +176,12 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     # while-loop with updates happens in perennial_distribution function
     n.old <- perennial_distribution(change.limit = 0.1, n.old = n.old, p.env = p.env,
                                     sp.resident, sp.invader) 
-  } 
-  
+  }
   
   # running the resident and invader for the remaining time steps
   for (t in (init.time.steps+1):(total.time.steps-1)){
-    
-    
-  # THIS IS ALL GOING TO CHANGE/SHUFFLE: ---------- 
-    
     # parameters for the varying env condition
     p.env <- parameters %>% filter(treatment == env.cond[t])
-    
-   # # adjusting non-varying or non-covarying parameters
-   #  
-   #  # constant lambda
-   #  if(vary.lambda == FALSE){
-   #    p.env[,lambda.columns] <- p.ave[,lambda.columns]
-   #  }
-   #  
-   #  # constant alpha
-   #  if(vary.alpha == FALSE){
-   #    p.env[,alpha.columns] <- p.ave[,alpha.columns]
-   #  }
-   #  
-   #  # parameters for no covariance between alpha and lambda
-   #  if(covary == FALSE){
-   #    lambda.env  <- parameters %>% filter(treatment == env.lambda[t])
-   #    alpha.env <- parameters %>% filter(treatment == env.alpha[t])
-   #    p.env[,lambda.columns] <- lambda.env[,lambda.columns]
-   #    p.env[,alpha.columns] <- alpha.env[,alpha.columns]
-   #  }
-   ### --------------- 
     
     # running invader and resident together
     N0.together <- n.all[t,]
@@ -279,7 +189,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     # figuring out starting invader population distribution if the invader is perennial
     # starting from the n.old found for average conditions above
     if(length(sp.invader) > 1){
-      
+      n.old[sp.resident] <- n.all[t,sp.resident]
       n.update <- perennial_distribution(change.limit = 0.01, n.old = n.old, p.env = p.env,
                                          sp.resident, sp.invader) # function
       
@@ -287,6 +197,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     } else {
       N0.together[sp.invader] <- 1 # if the invader has only one life stage
     }
+    n.all[t,sp.inv.dist] <- N0.together[sp.invader]
     
     
     # running one time step with the appropriate environmental parameters
@@ -314,6 +225,117 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
   
   n.all$time <- 1:total.time.steps
   return(n.all)
+  
+}
+
+```
+
+
+
+Function to calculate growth rates for different combinations of varying parameters. For partitions where lambda is set to not vary, also sets germination and survival terms to not vary. All the column names are based on the actual species names. The next section of the code can use this to calculate growth rates and average across the time series. *COVARYING COMPONENT ISN'T WORKING YET*
+
+```{r running-invasion}
+
+# similar but modified function for the following runs with different varying parameters
+# this uses the output from the full run above
+run_varying <- function(sp.invader, sp.resident, parameters, env.cond,
+                         vary.lambda = TRUE, vary.alpha = TRUE, covary = TRUE,
+                         init.time.steps = 50, total.time.steps = 100, n.full) {
+  
+  
+  # populations with resident species not impacted by the invader
+  if(pair == 'as.an'){
+    n.all <- tibble(an = as.numeric(rep(NA, total.time.steps)),
+                    as = as.numeric(rep(NA, total.time.steps)))
+  } 
+  else if(pair == 'p.an'){
+    n.all <- tibble(an = as.numeric(rep(NA, total.time.steps)),
+                    s = as.numeric(rep(NA, total.time.steps)),
+                    p = as.numeric(rep(NA, total.time.steps)))
+  }
+  
+  
+  # name of column(s) for resident species pop when impacted by invading pop
+  sp.res.impact <- paste(sp.resident, 'impact', sep = '.')
+  # names of column(s) for invader stage distribution
+  sp.inv.dist <- paste(sp.invader, 'dist', sep = '.')
+  
+  # parameters for the average env condition
+  p.ave <- parameters %>% filter(treatment == 'average')
+  
+  # columns used for the non-varying parameters
+  alpha.columns <- c(paste('a', sp.invader, sep = '.'), 
+                     paste('a', sp.resident, sep = '.'))
+  lambda.columns <- parameters %>% 
+    select(!c(all_of(alpha.columns),'species','treatment')) %>% 
+    names()
+  
+  # # environmental condition vectors for the no covariance option TO DO: MAY NEED TO CHANGE
+   env.lambda <- sample(env.cond, size = length(env.cond), replace = FALSE)
+   env.alpha <- sample(env.cond, size = length(env.cond), replace = FALSE)
+  
+  
+  # running the resident and invader for the remaining time steps
+  for (t in (init.time.steps+1):(total.time.steps-1)){
+    
+    
+    # parameters for the varying env condition
+    p.env <- parameters %>% filter(treatment == env.cond[t])
+    
+   # adjusting non-varying or non-covarying parameters
+
+    # constant lambda
+    if(vary.lambda == FALSE){
+      p.env[,lambda.columns] <- p.ave[,lambda.columns]
+    }
+
+    # constant alpha
+    if(vary.alpha == FALSE){
+      p.env[,alpha.columns] <- p.ave[,alpha.columns]
+    }
+
+    # parameters for no covariance between alpha and lambda 
+    # TO DO: THIS PROBABLY NEEDS TO CHANGE?
+    if(covary == FALSE){
+      lambda.env  <- parameters %>% filter(treatment == env.lambda[t])
+      alpha.env <- parameters %>% filter(treatment == env.alpha[t])
+      p.env[,lambda.columns] <- lambda.env[,lambda.columns]
+      p.env[,alpha.columns] <- alpha.env[,alpha.columns]
+    }
+    
+    
+    # Starting population sizes are based on the fully varying simulation only
+    # Resident starting population size is un-impacted (without the invader present)
+    # Invader total starting population size is 1, stage distribution is the same
+    # stage distribution from the fully varying run
+    
+    N0.together <- n.full[t,] 
+    if(length(sp.invader) > 1){
+      N0.together[sp.invader] <- N0.together[sp.inv.dist] 
+    } else {
+      N0.together[sp.invader] <- 1 # if the invader has only one life stage
+    }
+    
+    
+    # running one time step with the appropriate environmental parameters
+    n.res.impact <- pop_interactions(N0 = N0.together, param = p.env)
+    
+    # saving this output as the invader population and the impacted resident population
+    n.all[t+1,sp.invader] <- n.res.impact[sp.invader]
+    n.all[t+1,sp.res.impact] <- n.res.impact[sp.resident]
+    
+    # growth rate of the resident from full variation starting point
+    sp.res.gr <- paste('gr', paste(sp.resident, collapse = '.'), sep = '.') # column name
+    n.all[t+1,sp.res.gr] <- sum(n.all[t+1,sp.res.impact])/sum(N0.together[sp.resident])
+    
+    # growth rate of the invader (always from an initial total population of 1)
+    sp.inv.gr <- paste('gr', paste(sp.invader, collapse = '.'), sep = '.') # column name
+    n.all[t+1,sp.inv.gr] <- sum(n.all[t+1,sp.invader])
+    
+  }
+  
+  n.all$time <- 1:total.time.steps
+  return(n.all) 
   
 }
 
@@ -381,7 +403,6 @@ if(pair == 'p.an'){
   pars <- pars.p.an
 }
   
-
 # two equally probable environmental conditions
 env.ratio <- 0.5
 env.draw <- rbinom(time.full, 1, env.ratio) 
@@ -398,13 +419,13 @@ pars.ave <- pars %>%
 
 pars <- pars %>% full_join(pars.ave)
 
-invade.1.full <-  run_invasion(sp.invader = sp.1, sp.resident = sp.2, N0.r = 100, 
+invade.1.full <-  run_full(sp.invader = sp.1, sp.resident = sp.2, N0.r = 100, 
                          parameters = pars, env.cond = env.condition,
                         # vary.lambda = TRUE, vary.alpha = TRUE, 
                          init.time.steps = time.warm.up, total.time.steps = time.full) 
 
 
-invade.2.full <-  run_invasion(sp.invader = sp.2, sp.resident = sp.1,
+invade.2.full <-  run_full(sp.invader = sp.2, sp.resident = sp.1,
                                N0.r = 100, parameters = pars, env.cond = env.condition,
                               # vary.lambda = TRUE, vary.alpha = TRUE,
                                init.time.steps = time.warm.up, total.time.steps = time.full)
@@ -416,6 +437,38 @@ plot_gr(invade.1.full)
 
 plot_invasion(filter(invade.2.full, time > time.warm.up))
 plot_gr(invade.2.full)
+
+```
+Testing the non-varying runs (relies on code in section above). *TO DO: double-check growth rate calculations in both run_full and run_varying to see why they're not working for the first time step* 
+```{r variable-run}
+
+# check that when everything is varying as with the full variation the results are consistent
+invade.1.full.test <- run_varying(sp.invader = sp.1, sp.resident = sp.2, 
+                               parameters = pars, env.cond = env.condition,
+                               vary.lambda = TRUE, vary.alpha = TRUE, covary = TRUE,
+                               init.time.steps = time.warm.up, total.time.steps = time.full,
+                               n.full = invade.1.full)
+
+invade.2.full.test <- run_varying(sp.invader = sp.2, sp.resident = sp.1, 
+                               parameters = pars, env.cond = env.condition,
+                               vary.lambda = TRUE, vary.alpha = TRUE, covary = TRUE,
+                               init.time.steps = time.warm.up, total.time.steps = time.full,
+                               n.full = invade.2.full)
+
+
+# now doing the different variations
+invade.1.lambda <- run_varying(sp.invader = sp.1, sp.resident = sp.2, 
+                               parameters = pars, env.cond = env.condition,
+                               vary.lambda = FALSE, vary.alpha = TRUE, covary = TRUE,
+                               init.time.steps = time.warm.up, total.time.steps = time.full,
+                               n.full = invade.1.full)
+
+invade.2.lambda <- run_varying(sp.invader = sp.2, sp.resident = sp.1, 
+                               parameters = pars, env.cond = env.condition,
+                               vary.lambda = FALSE, vary.alpha = TRUE, covary = TRUE,
+                               init.time.steps = time.warm.up, total.time.steps = time.full,
+                               n.full = invade.2.full)
+
 
 ```
 
@@ -430,7 +483,25 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
   
   part <- tibble(sp.invader = inv.name, sp.resident = res.name)
   
-  # no variation
+  # full variation
+  invade.full <-  run_full(sp.invader = sp.inv, sp.resident = sp.res,
+                               N0.r = 100, parameters = pars, env.cond = env.condition,
+                               init.time.steps = time.warm.up, total.time.steps = time.full) %>%
+    filter(time > time.warm.up + 1) %>% 
+    pivot_longer(cols = starts_with('gr'),
+                 names_to = 'species', names_prefix = 'gr.',
+                 values_to = 'growth.rate',
+                 values_drop_na = TRUE) %>% 
+    mutate(gr.log = log(growth.rate))
+  
+  part$inv.full <- invade.full %>% 
+    filter(species == inv.name) %>%
+    select(gr.log) %>% colMeans()
+  part$res.full <- invade.full %>% 
+    filter(species == res.name) %>%
+    select(gr.log) %>% colMeans()
+  
+  # no variation full run
   invade.none <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
                                N0.r = 100, parameters = pars, env.cond = env.condition,
                                init.time.steps = time.warm.up, 
@@ -493,25 +564,6 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
   
   part$inv.ea <- a.inv.mean - part$inv.e0 
   part$res.ea <- a.res.mean- part$res.e0
-  
-  # full variation
-  invade.full <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
-                               N0.r = 100, parameters = pars, env.cond = env.condition,
-                               init.time.steps = time.warm.up, total.time.steps = time.full,
-                               vary.lambda = TRUE, vary.alpha = TRUE) %>%
-    filter(time > time.warm.up + 1) %>% 
-    pivot_longer(cols = starts_with('gr'),
-                 names_to = 'species', names_prefix = 'gr.',
-                 values_to = 'growth.rate',
-                 values_drop_na = TRUE) %>% 
-    mutate(gr.log = log(growth.rate))
-  
-  part$inv.full <- invade.full %>% 
-    filter(species == inv.name) %>%
-    select(gr.log) %>% colMeans()
-  part$res.full <- invade.full %>% 
-    filter(species == res.name) %>%
-    select(gr.log) %>% colMeans()
   
   part$inv.eint <- part$inv.full - (part$inv.e0 + part$inv.el + part$inv.ea)
   part$res.eint <- part$res.full - (part$res.e0 + part$res.el + part$res.ea)
@@ -692,7 +744,7 @@ if(pair == 'p.an'){
 time.warm.up <- 50
 time.full <- 100
 
-# initialise dataframe
+# initialize dataframe
   partitions.env <- tibble(sp.invader = character(), sp.resident = character(),
                            partition = character(),
                            inv = numeric(), res = numeric(), delta = numeric(), 
