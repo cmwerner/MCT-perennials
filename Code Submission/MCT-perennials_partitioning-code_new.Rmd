@@ -439,7 +439,7 @@ plot_invasion(filter(invade.2.full, time > time.warm.up))
 plot_gr(invade.2.full)
 
 ```
-Testing the non-varying runs (relies on code in section above). *TO DO: double-check growth rate calculations in both run_full and run_varying to see why they're not working for the first time step* 
+Testing the non-varying runs (relies on code in section above). 
 ```{r variable-run}
 
 # check that when everything is varying as with the full variation the results are consistent
@@ -485,8 +485,9 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
   
   # full variation
   invade.full <-  run_full(sp.invader = sp.inv, sp.resident = sp.res,
-                               N0.r = 100, parameters = pars, env.cond = env.condition,
-                               init.time.steps = time.warm.up, total.time.steps = time.full) %>%
+                           N0.r = 100, parameters = pars, env.cond = env.condition,
+                           init.time.steps = time.warm.up, total.time.steps = time.full) 
+  invade.full.2 <- invade.full %>%
     filter(time > time.warm.up + 1) %>% 
     pivot_longer(cols = starts_with('gr'),
                  names_to = 'species', names_prefix = 'gr.',
@@ -494,19 +495,20 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
                  values_drop_na = TRUE) %>% 
     mutate(gr.log = log(growth.rate))
   
-  part$inv.full <- invade.full %>% 
+  part$inv.full <- invade.full.2 %>% 
     filter(species == inv.name) %>%
     select(gr.log) %>% colMeans()
-  part$res.full <- invade.full %>% 
+  part$res.full <- invade.full.2 %>% 
     filter(species == res.name) %>%
     select(gr.log) %>% colMeans()
   
   # no variation full run
-  invade.none <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
-                               N0.r = 100, parameters = pars, env.cond = env.condition,
-                               init.time.steps = time.warm.up, 
-                               total.time.steps = time.full,
-                               vary.lambda = FALSE, vary.alpha = FALSE) %>%
+  invade.none <-  run_varying(sp.invader = sp.inv, sp.resident = sp.res,
+                              parameters = pars, env.cond = env.condition,
+                              init.time.steps = time.warm.up, 
+                              total.time.steps = time.full,
+                              vary.lambda = FALSE, vary.alpha = FALSE, covary = TRUE,
+                              n.full = invade.full) %>%
     filter(time > time.warm.up + 1) %>% 
     pivot_longer(cols = starts_with('gr'),
                  names_to = 'species', names_prefix = 'gr.',
@@ -522,10 +524,11 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
     select(gr.log) %>% colMeans()
   
   # lambda variation only
-  invade.l <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
-                            N0.r = 100, parameters = pars, env.cond = env.condition,
+  invade.l <- run_varying(sp.invader = sp.inv, sp.resident = sp.res,
+                            parameters = pars, env.cond = env.condition,
                             init.time.steps = time.warm.up, total.time.steps = time.full,
-                            vary.lambda = TRUE, vary.alpha = FALSE) %>%
+                            vary.lambda = TRUE, vary.alpha = FALSE, covary = TRUE,
+                            n.full = invade.full) %>%
     filter(time > time.warm.up + 1) %>% 
     pivot_longer(cols = starts_with('gr'),
                  names_to = 'species', names_prefix = 'gr.',
@@ -544,10 +547,11 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
   part$res.el <- l.res.mean- part$res.e0
   
   # alpha variation only
-  invade.a <-  run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
-                            N0.r = 100, parameters = pars, env.cond = env.condition,
+  invade.a <-  run_varying(sp.invader = sp.inv, sp.resident = sp.res,
+                            parameters = pars, env.cond = env.condition,
                             init.time.steps = time.warm.up, total.time.steps = time.full,
-                            vary.lambda = FALSE, vary.alpha = TRUE) %>%
+                            vary.lambda = FALSE, vary.alpha = TRUE, covary = TRUE,
+                            n.full = invade.full) %>%
     filter(time > time.warm.up + 1) %>% 
     pivot_longer(cols = starts_with('gr'),
                  names_to = 'species', names_prefix = 'gr.',
@@ -568,12 +572,13 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
   part$inv.eint <- part$inv.full - (part$inv.e0 + part$inv.el + part$inv.ea)
   part$res.eint <- part$res.full - (part$res.e0 + part$res.el + part$res.ea)
   
+  # TO DO: NEED TO CHECK CORRELATION ONE
   # no correlation
-   invade.nocov <- run_invasion(sp.invader = sp.inv, sp.resident = sp.res,
-                               N0.r = 100, parameters = pars, env.cond = env.condition,
+   invade.nocov <- run_varying(sp.invader = sp.inv, sp.resident = sp.res,
+                               parameters = pars, env.cond = env.condition,
                                init.time.steps = time.warm.up, total.time.steps = time.full,
-                               vary.lambda = TRUE, vary.alpha = TRUE,
-                               covary = FALSE) %>%
+                               vary.lambda = TRUE, vary.alpha = TRUE, covary = FALSE,
+                              n.full = invade.full) %>%
     filter(time > time.warm.up + 1) %>% 
     pivot_longer(cols = starts_with('gr'),
                  names_to = 'species', names_prefix = 'gr.',
@@ -666,6 +671,13 @@ time.full <- 300
 env.draw <- rbinom(time.full, 1, env.ratio) # sequence of the environment 
 env.condition <- if_else(env.draw > 0, 'wet','dry')
 
+
+# testing partition_epsilons function
+test.1 <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars, 
+                                 env.condition, time.warm.up, time.full)
+test.2 <- partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars, 
+                           env.condition, time.warm.up, time.full)
+
 partitions <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars, 
                                  env.condition, time.warm.up, time.full) %>%
   rbind(partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars, 
@@ -721,8 +733,8 @@ ggplot(partitions, aes(x = partition, y = delta, fill = partition)) +
 Running over an environmental sequence instead of a particular env.ratio. This was used for testing before running on the computer cluster (can take a while to run depending on settings)
 ```{r env-seq}
 # This determines which coexistence pair we're looking at
-pair <- 'as.an'
-#pair <- 'p.an'
+#pair <- 'as.an'
+pair <- 'p.an'
 
 # select the relevant parameter set
 if(pair == 'as.an') {
@@ -742,7 +754,7 @@ if(pair == 'p.an'){
 
 # number of time steps for each run
 time.warm.up <- 50
-time.full <- 100
+time.full <- 150
 
 # initialize dataframe
   partitions.env <- tibble(sp.invader = character(), sp.resident = character(),
