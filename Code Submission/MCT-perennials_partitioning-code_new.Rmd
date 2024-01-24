@@ -679,12 +679,13 @@ test.1 <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars,
 test.2 <- partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars, 
                              env.condition, time.warm.up, time.full)
 
+
 partitions <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars, 
                                  env.condition, time.warm.up, time.full) %>%
   rbind(partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars, 
                            env.condition, time.warm.up, time.full)) %>%
   #pivot_longer(cols = inv.e0:res.eint) %>%
-  pivot_longer(cols = inv.e0:res.storage) %>%
+  pivot_longer(cols = inv.full:res.storage) %>%
   separate(name, into = c('player', 'partition')) %>%
   pivot_wider(names_from = player, values_from = value) %>%
   mutate(delta = inv - res,
@@ -718,7 +719,27 @@ ggplot(partitions, aes(x = partition, y = delta, fill = partition)) +
              labeller = labeller(sp.invader = species_names)) + 
   geom_bar(stat = 'identity', position = position_dodge()) +
   theme_cw() +
-  ylab('Partitioning of growth rate when rare') +
+  ylab('Partitioning Delta terms') +
+  scale_x_discrete(labels = c('full' = 'Full',  'e0' = expression(Delta^0),
+                              'el' = expression(Delta^lambda), 'ea' = expression(Delta^alpha),
+                              'eint' = expression(Delta^{alpha*lambda}),
+                              'storage' = expression(Delta^(alpha*lambda)), 
+                              'nocov' = expression(Delta^{alpha!=lambda})),
+                   name = 'Partition') +
+  scale_fill_manual(values = cb_palette_long) +
+  guides(fill = 'none')
+
+
+# Delta as invader-resident comparison
+partitions.long <- partitions %>% 
+  pivot_longer(cols = c('delta', 'inv', 'res'), names_to = 'epsilon', values_to = 'value')
+
+ggplot(partitions.long, aes(x = partition, y = value, fill = partition)) + 
+  facet_grid(cols = vars(sp.invader), rows = vars(epsilon),
+             labeller = labeller(sp.invader = species_names)) + 
+  geom_bar(stat = 'identity', position = position_dodge()) +
+  theme_cw() +
+  ylab('Partitioning Delta terms') +
   scale_x_discrete(labels = c('full' = 'Full',  'e0' = expression(Delta^0),
                               'el' = expression(Delta^lambda), 'ea' = expression(Delta^alpha),
                               'eint' = expression(Delta^{alpha*lambda}),
@@ -786,7 +807,7 @@ for(env.ratio in env.seq){
     rbind(partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars.2, 
                              env.condition, time.warm.up, time.full)) %>%
     #pivot_longer(cols = inv.e0:res.eint) %>%
-    pivot_longer(cols = inv.e0:res.storage) %>%
+    pivot_longer(cols = inv.full:res.storage) %>%
     separate(name, into = c('player', 'partition')) %>%
     pivot_wider(names_from = player, values_from = value) %>%
     mutate(delta = inv - res,
@@ -816,6 +837,20 @@ partition.legend <- c(
 
 ggplot(partitions.env, aes(x = env.ratio, y = delta, color = partition)) +
   facet_grid(cols = vars(sp.invader),
+             labeller = labeller(sp.invader = species_names)) + 
+  geom_line() +
+  theme_cw() +
+  scale_color_manual(values = cb_palette_long, labels = partition.legend, name = 'Partition') +
+  xlab ('Proportion wet years') +
+  ylab('Delta')
+
+
+# Delta as invader-resident comparison
+partitions.env.long <- partitions.env %>% 
+  pivot_longer(cols = c('delta', 'inv', 'res'), names_to = 'epsilon', values_to = 'value')
+
+ggplot(partitions.env.long, aes(x = env.ratio, y = value, color = partition)) +
+  facet_grid(cols = vars(sp.invader), rows = vars(epsilon),
              labeller = labeller(sp.invader = species_names)) + 
   geom_line() +
   theme_cw() +
