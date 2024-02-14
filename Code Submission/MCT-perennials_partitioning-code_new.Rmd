@@ -379,30 +379,55 @@ plot_gr <- function(df) { # plots population growth rates
 
 ## Running and plotting invasions 
 
-Full variation with no partitions, single run
-```{r normal-run}
-time.warm.up <- 20
-time.full <- 100
-
-
-case <- 'p'
+Set up reading in parameters, used in all the following sections of code
+```{r parameters}
+# CHOOSE: This determines which coexistence pair we're looking at
+case <- 'as'
+#case <- 'p'
 
 pair <- paste(case, 'an', sep = '.')
+
+varying <- 'alpha'
+
+# favorable <- 'same-consistent'
+ favorable <- 'opposite-consistent'
+# favorable <- 'same-flipped'
+
+
+# file names
+file.core <- paste0(case, '_', varying, '-', favorable)
+main.wd <- './'
+
+file.in <- paste0(main.wd, 'model-parameters/model-parameters_', file.core, '.csv')
+
+file.out <- paste0(main.wd, 'model-data/mct-partitions_', file.core, '.RData')
+
+# SET PARAMETER VALUES 
+pars <- read.csv(file.in) 
+
 
 # select the relevant parameter set
 if(pair == 'as.an') {
   sp.1 <- 'an'
   sp.2 <- 'as'
-  sp.order <- c('an','as') 
-  pars <- pars.as.an 
+  sp.order <- c('an','as')
+  pars <- pars %>% mutate(stem.surv = NULL) 
 }
-
 if(pair == 'p.an'){
   sp.1 <- 'an'
   sp.2 <- c('s','p')
   sp.order <- c('an','s','p')
-  pars <- pars.p.an
+  pars <- pars %>% mutate(seed.surv = NULL)
 }
+
+```
+
+
+Full variation with no partitions, single run
+```{r normal-run}
+time.warm.up <- 20
+time.full <- 100
+
 
 # two equally probable environmental conditions
 env.ratio <- 0.5
@@ -611,45 +636,6 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
 Running that partition function 
 ```{r partition-run}
 
-# CHOOSE: This determines which coexistence pair we're looking at
-#case <- 'as'
-case <- 'p'
-
-pair <- paste(case, 'an', sep = '.')
-
-varying <- 'alpha'
-
-favorable <- 'same-consistent'
-# favorable <- 'opposite-consistent'
-# favorable <- 'same-flipped'
-
-
-# file names
-file.core <- paste0(case, '_', varying, '-', favorable)
-main.wd <- './'
-
-file.in <- paste0(main.wd, 'model-parameters/model-parameters_', file.core, '.csv')
-
-file.out <- paste0(main.wd, 'model-data/mct-partitions_', file.core, '.RData')
-
-# SET PARAMETER VALUES 
-pars <- read.csv(file.in) 
-
-
-# select the relevant parameter set
-if(pair == 'as.an') {
-  sp.1 <- 'an'
-  sp.2 <- 'as'
-  sp.order <- c('an','as')
-  pars <- pars %>% mutate(stem.surv = NULL) 
-}
-if(pair == 'p.an'){
-  sp.1 <- 'an'
-  sp.2 <- c('s','p')
-  sp.order <- c('an','s','p')
-  pars <- pars %>% mutate(seed.surv = NULL)
-}
-
 env.ratio <- 0.5 # ratio of wet years to dry years
 
 # adding rows for the weighted average of the parameters
@@ -754,24 +740,6 @@ ggplot(partitions.long, aes(x = partition, y = value, fill = partition)) +
 
 Running over an environmental sequence instead of a particular env.ratio. This was used for testing before running on the computer cluster (can take a while to run depending on settings)
 ```{r env-seq}
-# This determines which coexistence pair we're looking at
-#pair <- 'as.an'
-pair <- 'p.an'
-
-# select the relevant parameter set
-if(pair == 'as.an') {
-  pars <- pars.as.an
-  sp.1 <- 'an'
-  sp.2 <- 'as'
-  sp.order <- c('an','as') 
-  
-}
-if(pair == 'p.an'){
-  pars <- pars.p.an
-  sp.1 <- 'an'
-  sp.2 <- c('s','p')
-  sp.order <- c('an','s','p')
-}
 
 
 # number of time steps for each run
@@ -783,7 +751,7 @@ partitions.env <- tibble(sp.invader = character(), sp.resident = character(),
                          partition = character(),
                          inv = numeric(), res = numeric(), delta = numeric(), 
                          env.ratio = numeric())
-env.seq <- seq(0, 1, by = 0.25) # ratio of wet years to dry years
+env.seq <- seq(0, 1, by = 0.1) # ratio of wet years to dry years
 
 for(env.ratio in env.seq){
   # adding rows for the weighted average of the parameters
@@ -863,89 +831,116 @@ ggplot(partitions.env.long, aes(x = env.ratio, y = value, color = partition)) +
 Verifying that parameters can result in long-term coexistence in conditions predicted by positive low-density growth rates
 ```{r long-term-coexistence}
 
-# CHOOSE: This determines which coexistence pair we're looking at
-#case <- 'as'
-case <- 'p'
 
-pair <- paste(case, 'an', sep = '.')
+time.warm.up <- 250
+time.full <- 1000
 
-varying <- 'alpha'
-favorable <- 'same-consistent'
-# favorable <- 'opposite-consistent'
-# favorable <- 'same-flipped'
-
-
-# file names
-file.core <- paste0(case, '_', varying, '-', favorable)
-main.wd <- './'
-
-file.in <- paste0(main.wd, 'model-parameters/model-parameters_', file.core, '.csv')
-
-file.out <- paste0(main.wd, 'model-data/mct-partitions_', file.core, '.RData')
-
-# SET PARAMETER VALUES 
-pars <- read.csv(file.in) 
-
-
-# select the relevant parameter set
-if(pair == 'as.an') {
-  sp.1 <- 'an'
-  sp.2 <- 'as'
-  sp.order <- c('an','as')
-  pars <- pars %>% mutate(stem.surv = NULL) 
-}
-if(pair == 'p.an'){
-  sp.1 <- 'an'
-  sp.2 <- c('s','p')
-  sp.order <- c('an','s','p')
-  pars <- pars %>% mutate(seed.surv = NULL)
-}
-
-time.full <- 200
-
-# want a more consistent/varying way for setting these starting values (high, equal, and low)
+# Starting both species at initially low values
 N0.1 <- 1/length(sp.1)
-N0.2 <- 1/length(sp.2) 
+N0.2 <- 1/length(sp.2)
 
-# two equally probable environmental conditions
-env.ratio <- 0.5
-env.draw <- rbinom(time.full, 1, env.ratio) 
-env.condition <- if_else(env.draw > 0, 'wet','dry')
+env.seq <- seq(0, 1, by = 0.1) # ratio of wet years to dry years
 
+# initialize dataframe
+coexistence.env <- tibble(sp.invader = character(), sp.resident = character(), 
+                          env.ratio = numeric())
 
-# populations with resident species not impacted by the invader
-if(pair == 'as.an'){
-  n.all <- tibble(an = as.numeric(rep(NA, time.full)),
-                  as = as.numeric(rep(NA, time.full)))
-} else if(pair == 'p.an'){
-  n.all <- tibble(an = as.numeric(rep(NA, time.full)),
-                  s = as.numeric(rep(NA, time.full)),
-                  p = as.numeric(rep(NA, time.full)))
-}
-
-# setting initial populations
-n.all[1,sp.1] <- N0.1 
-n.all[1,sp.2] <- N0.2
-
-
-for(t in 1:time.full){
-  # parameters for the varying env condition
+# function to run coexistence invasion for a given env ratio and species,
+# returning average population sizes from the final 1/4 of the time series
+coexistence_run <- function(sp.invader, sp.resident, env.ratio, 
+                            time.warm.up, time.full, N0.i, N0.r) {
+  
+  env.draw <- rbinom(time.full, 1, env.ratio) 
+  env.condition <- if_else(env.draw > 0, 'wet','dry')
+  
+  # initializing dataframe
+  if(pair == 'as.an'){
+    n.all <- tibble(an = as.numeric(rep(NA, time.full)),
+                    as = as.numeric(rep(NA, time.full)))
+  } else if(pair == 'p.an'){
+    n.all <- tibble(an = as.numeric(rep(NA, time.full)),
+                    s = as.numeric(rep(NA, time.full)),
+                    p = as.numeric(rep(NA, time.full)))
+  }
+  
+  # setting initial populations
+  n.all[1,sp.resident] <- N0.r 
+  n.all[1,sp.invader] <- 0
+  
+  # running just sp 1 at the beginning
+  for(t in 1:time.warm.up){
+     # parameters for the varying env condition
     p.env <- pars %>% filter(treatment == env.condition[t])
     
     # running invader and resident together
     N0.together <- n.all[t,]
-
+    
     # running one time step with the appropriate environmental parameters
     n.res.impact <- pop_interactions(N0 = N0.together, param = p.env)
     
     # saving this output as the invader population and the impacted resident population
-    n.all[t+1,sp.1] <- n.res.impact[sp.1]
-    n.all[t+1,sp.2] <- n.res.impact[sp.2]
+    n.all[t+1,sp.resident] <- n.res.impact[sp.resident]
+    n.all[t+1,sp.invader] <- n.res.impact[sp.invader]
+  }
+  
+  n.all[time.warm.up,sp.invader] <- N0.i
+  
+  for(t in time.warm.up:time.full){
+    # parameters for the varying env condition
+    p.env <- pars %>% filter(treatment == env.condition[t])
+    
+    # running invader and resident together
+    N0.together <- n.all[t,]
+    
+    # running one time step with the appropriate environmental parameters
+    n.res.impact <- pop_interactions(N0 = N0.together, param = p.env)
+    
+    
+    # saving this output as the invader population and the impacted resident population
+    n.all[t+1,sp.resident] <- n.res.impact[sp.resident]
+    n.all[t+1,sp.invader] <- n.res.impact[sp.invader]
+  }
+  n.all$time <- 1:(time.full+1)
+#  n.all %>% plot_invasion() %>% print()
+  
+  # average of the last quarter of the time series
+  n.ave <- n.all %>% filter(time > time.full*3/4) %>%
+   colMeans() %>% as.list()
+  n.ave$env.ratio <- env.ratio
+  n.ave$sp.invader <- sp.invader
+  n.ave$sp.resident <- sp.resident
+  
+  return(n.ave)
 }
 
-n.all$time <- 1:(time.full+1)
 
-n.all %>% plot_invasion()
+for(env.ratio in env.seq){
+  # run with sp.1 initialized first
+  n.ave.1 <- coexistence_run(sp.invader = sp.1, sp.resident = sp.2, 
+                             env.ratio, time.warm.up, time.full, 
+                             N0.i = N0.1, N0.r = N0.2)
+  coexistence.env <- rbind(coexistence.env, n.ave.1)
+  # repeat with sp.2 initialized first
+  n.ave.2 <- coexistence_run(sp.invader = sp.2, sp.resident = sp.1, 
+                             env.ratio, time.warm.up, time.full, 
+                             N0.i = N0.2, N0.r = N0.1)
+  coexistence.env <- rbind(coexistence.env, n.ave.2)
+}
+
+
+print(coexistence.env)
+
+coexist.env.long <- coexistence.env %>% pivot_longer(cols = c(sp.1, sp.2), names_to = "sp", values_to = "population")
+
+ggplot(coexist.env.long, aes(x = env.ratio, y = population, color = sp)) +
+  facet_grid(cols = vars(sp.invader),
+             labeller = labeller(sp.invader = species_names)) + 
+  geom_line() +
+  theme_cw() +
+  xlab('Proportion wet years') +
+  ylab('Population')
+
+
 
 ```
 
