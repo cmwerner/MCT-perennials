@@ -76,7 +76,6 @@ pop_interactions <- function(N0, param){
     pars.p <- param %>% filter(species == 'p')
     pars.an <- param %>% filter(species == 'an')
     
-    
     n.s <- N0$p*pars.p$lambda /
       (1 + pars.p$a.an * pars.an$seed.germ * N0$an +
          pars.p$a.s * pars.s$seed.germ * N0$s +
@@ -233,7 +232,7 @@ run_full <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
 
 
 
-Function to calculate growth rates for different combinations of varying parameters. For partitions where lambda is set to not vary, also sets germination and survival terms to not vary. All the column names are based on the actual species names. The next section of the code can use this to calculate growth rates and average across the time series. *COVARYING COMPONENT ISN'T WORKING YET*
+Function to calculate growth rates for different combinations of varying parameters. For partitions where lambda is set to not vary, also sets germination and survival terms to not vary. All the column names are based on the actual species names. The next section of the code can use this to calculate growth rates and average across the time series. 
 
 ```{r running-invasion}
 
@@ -598,7 +597,6 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
   part$inv.eint <- part$inv.full - (part$inv.e0 + part$inv.el + part$inv.ea)
   part$res.eint <- part$res.full - (part$res.e0 + part$res.el + part$res.ea)
   
-  # TO DO: NEED TO CHECK CORRELATION/COVARIANCE COMPONENT
   # no correlation
   invade.nocov <- run_varying(sp.invader = sp.inv, sp.resident = sp.res,
                               parameters = pars, env.cond = env.condition,
