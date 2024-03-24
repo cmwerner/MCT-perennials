@@ -6,6 +6,7 @@ n_sims <- 100
 setwd("/project/coexistence/cwerner5/") 
 library(parallel)
 library(Rmpi)
+library(snow)
 library(dplyr)
 library(tidyr)
 library(tibble)
@@ -53,7 +54,7 @@ pars <- pars %>% mutate(seed.surv = NULL)
 
 # number of time steps for each run
 time.warm.up <- 200
-time.full <- 400
+time.full <- 300
 
 # WRITE A FUNCTION TO PASS TO THE WORKER NODES. The function should perform
 #    a single simulation, and will then be repeated enough times to produce
@@ -123,7 +124,7 @@ clusterEvalQ(cl, setwd("/project/coexistence/cwerner5/"))
 clusterEvalQ(cl, library(dplyr))
 clusterEvalQ(cl, library(tidyr))
 clusterEvalQ(cl, library(tibble))
-clusterEvalQ(cl, source("mct-partitions-functions.R")) # put the functions used on each node
+clusterEvalQ(cl, source("mct-partitions-functions-revision.R")) # put the functions used on each node
 
 # Run the simulations on the cluster. Here x corresponds to the first argument
 #    of the SimFunc function. The cluster will evaluate the SimFunc for each element

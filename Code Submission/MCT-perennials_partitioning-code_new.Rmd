@@ -4,8 +4,6 @@ output: html_document
 ---
 A simplified version of the code used in the manuscript "Fluctuation-dependent coexistence of stage-structured species" to demonstrate how the partitioning works with a smaller number of simulation runs. The actual code was run on a computer cluster and is included in the "mct-partitions-functions.R" and "mct-partitions-run.R" files. 
 
-*Re-working for revisions, more closely matching Ellner et al 2019 approach*
-*TO DO: Still need to look at storage effect sub-partition. Also want to adjust to return both invader and resident terms with a separate function/wrapper to calculate the deltas, so we have the option of looking at these individually. Also need to do code checks for long-term coexistence using these parameters in a more systematic way*
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -270,7 +268,7 @@ run_varying <- function(sp.invader, sp.resident, parameters, env.cond,
     select(!c(all_of(alpha.columns),'species','treatment')) %>% 
     names()
   
-  # # environmental condition vectors for the no covariance option TO DO: MAY NEED TO CHANGE
+  # # environmental condition vectors for the no covariance option 
   env.lambda <- sample(env.cond, size = length(env.cond), replace = FALSE)
   env.alpha <- sample(env.cond, size = length(env.cond), replace = FALSE)
   
@@ -295,7 +293,6 @@ run_varying <- function(sp.invader, sp.resident, parameters, env.cond,
     }
     
     # parameters for no covariance between alpha and lambda 
-    # TO DO: THIS PROBABLY NEEDS TO CHANGE?
     if(covary == FALSE){
       lambda.env  <- parameters %>% filter(treatment == env.lambda[t])
       alpha.env <- parameters %>% filter(treatment == env.alpha[t])
@@ -381,15 +378,15 @@ plot_gr <- function(df) { # plots population growth rates
 Set up reading in parameters, used in all the following sections of code
 ```{r parameters}
 # CHOOSE: This determines which coexistence pair we're looking at
-case <- 'as'
-#case <- 'p'
+#case <- 'as'
+case <- 'p'
 
 pair <- paste(case, 'an', sep = '.')
 
 varying <- 'alpha'
 
-# favorable <- 'same-consistent'
- favorable <- 'opposite-consistent'
+ favorable <- 'same-consistent'
+# favorable <- 'opposite-consistent'
 # favorable <- 'same-flipped'
 
 
@@ -424,8 +421,8 @@ if(pair == 'p.an'){
 
 Full variation with no partitions, single run
 ```{r normal-run}
-time.warm.up <- 20
-time.full <- 100
+time.warm.up <- 100
+time.full <- 200
 
 
 # two equally probable environmental conditions
@@ -433,25 +430,25 @@ env.ratio <- 0.5
 env.draw <- rbinom(time.full, 1, env.ratio) 
 env.condition <- if_else(env.draw > 0, 'wet','dry')
 
-pars <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1-env.ratio))
+pars.full <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1-env.ratio))
 
-pars.ave <- pars %>% 
+pars.ave <- pars.full %>% 
   group_by(species) %>%
   summarise_if(is.numeric,
                ~ weighted.mean(., weight)) %>%
   mutate(weight = NA, treatment = 'average') %>% 
   arrange(factor(species, levels = sp.order)) # need to keep them in the right order for later
 
-pars <- pars %>% full_join(pars.ave)
+pars.full <- pars.full %>% full_join(pars.ave)
 
 invade.1.full <-  run_full(sp.invader = sp.1, sp.resident = sp.2, N0.r = 100, 
-                           parameters = pars, env.cond = env.condition,
+                           parameters = pars.full, env.cond = env.condition,
                            # vary.lambda = TRUE, vary.alpha = TRUE, 
                            init.time.steps = time.warm.up, total.time.steps = time.full) 
 
 
 invade.2.full <-  run_full(sp.invader = sp.2, sp.resident = sp.1,
-                           N0.r = 100, parameters = pars, env.cond = env.condition,
+                           N0.r = 100, parameters = pars.full, env.cond = env.condition,
                            # vary.lambda = TRUE, vary.alpha = TRUE,
                            init.time.steps = time.warm.up, total.time.steps = time.full)
 
@@ -464,18 +461,20 @@ plot_invasion(filter(invade.2.full, time > time.warm.up))
 plot_gr(invade.2.full)
 
 ```
+
 Testing the non-varying runs (relies on code in section above). 
 ```{r variable-run}
 
+
 # check that when everything is varying as with the full variation the results are consistent
 invade.1.full.test <- run_varying(sp.invader = sp.1, sp.resident = sp.2, 
-                                  parameters = pars, env.cond = env.condition,
+                                  parameters = pars.full, env.cond = env.condition,
                                   vary.lambda = TRUE, vary.alpha = TRUE, covary = TRUE,
                                   init.time.steps = time.warm.up, total.time.steps = time.full,
                                   n.full = invade.1.full)
 
 invade.2.full.test <- run_varying(sp.invader = sp.2, sp.resident = sp.1, 
-                                  parameters = pars, env.cond = env.condition,
+                                  parameters = pars.full, env.cond = env.condition,
                                   vary.lambda = TRUE, vary.alpha = TRUE, covary = TRUE,
                                   init.time.steps = time.warm.up, total.time.steps = time.full,
                                   n.full = invade.2.full)
@@ -483,13 +482,13 @@ invade.2.full.test <- run_varying(sp.invader = sp.2, sp.resident = sp.1,
 
 # now doing the different variations
 invade.1.lambda <- run_varying(sp.invader = sp.1, sp.resident = sp.2, 
-                               parameters = pars, env.cond = env.condition,
+                               parameters = pars.full, env.cond = env.condition,
                                vary.lambda = FALSE, vary.alpha = TRUE, covary = TRUE,
                                init.time.steps = time.warm.up, total.time.steps = time.full,
                                n.full = invade.1.full)
 
 invade.2.lambda <- run_varying(sp.invader = sp.2, sp.resident = sp.1, 
-                               parameters = pars, env.cond = env.condition,
+                               parameters = pars.full, env.cond = env.condition,
                                vary.lambda = FALSE, vary.alpha = TRUE, covary = TRUE,
                                init.time.steps = time.warm.up, total.time.steps = time.full,
                                n.full = invade.2.full)
@@ -637,19 +636,19 @@ Running that partition function
 env.ratio <- 0.5 # ratio of wet years to dry years
 
 # adding rows for the weighted average of the parameters
-pars <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1-env.ratio))
+pars.full <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1-env.ratio))
 
-pars.ave <- pars %>% 
+pars.ave <- pars.full %>% 
   group_by(species) %>%
   summarise_if(is.numeric,
                ~ weighted.mean(., weight)) %>%
   mutate(weight = NA, treatment = 'average') %>% 
   arrange(factor(species, levels = sp.order)) # need to keep them in the right order for later
 
-pars <- pars %>% full_join(pars.ave)
+pars.full <- pars.full %>% full_join(pars.ave)
 
-time.warm.up <- 200
-time.full <- 300
+time.warm.up <- 100
+time.full <- 200
 
 
 # Environmental conditions
@@ -658,15 +657,15 @@ env.condition <- if_else(env.draw > 0, 'wet','dry')
 
 
 # testing partition_epsilons function
-test.1 <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars, 
+test.1 <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars.full, 
                              env.condition, time.warm.up, time.full)
-test.2 <- partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars, 
+test.2 <- partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars.full, 
                              env.condition, time.warm.up, time.full)
 
 
-partitions <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars, 
+partitions <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars.full, 
                                  env.condition, time.warm.up, time.full) %>%
-  rbind(partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars, 
+  rbind(partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars.full, 
                            env.condition, time.warm.up, time.full)) %>%
   #pivot_longer(cols = inv.e0:res.eint) %>%
   pivot_longer(cols = inv.full:res.storage) %>%
@@ -737,12 +736,14 @@ ggplot(partitions.long, aes(x = partition, y = value, fill = partition)) +
 ```
 
 Running over an environmental sequence instead of a particular env.ratio. This was used for testing before running on the computer cluster (can take a while to run depending on settings)
+
+
 ```{r env-seq}
 
 
 # number of time steps for each run
-time.warm.up <- 50
-time.full <- 150
+time.warm.up <- 100
+time.full <- 200
 
 # initialize dataframe
 partitions.env <- tibble(sp.invader = character(), sp.resident = character(),
@@ -753,24 +754,24 @@ env.seq <- seq(0, 1, by = 0.1) # ratio of wet years to dry years
 
 for(env.ratio in env.seq){
   # adding rows for the weighted average of the parameters
-  pars.2 <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1 - env.ratio))
+  pars.full <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1 - env.ratio))
   
-  pars.ave <- pars.2 %>% 
+  pars.ave <- pars.full %>% 
     group_by(species) %>%
     summarise_if(is.numeric,
                  ~ weighted.mean(., weight)) %>%
     mutate(weight = NA, treatment = 'average') %>% 
     arrange(factor(species, levels = sp.order)) # need to keep them in the right order for later
   
-  pars.2 <- pars.2 %>% full_join(pars.ave)
+  pars.full <- pars.full %>% full_join(pars.ave)
   
   
   env.draw <- rbinom(time.full, 1, env.ratio) # sequence of the environment 
   env.condition <- if_else(env.draw > 0, 'wet','dry')
   
-  partitions <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars.2, 
+  partitions <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars.full, 
                                    env.condition, time.warm.up, time.full) %>%
-    rbind(partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars.2, 
+    rbind(partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars.full, 
                              env.condition, time.warm.up, time.full)) %>%
     #pivot_longer(cols = inv.e0:res.eint) %>%
     pivot_longer(cols = inv.full:res.storage) %>%
@@ -826,7 +827,7 @@ ggplot(partitions.env.long, aes(x = env.ratio, y = value, color = partition)) +
 
 ```
 
-Verifying that parameters can result in long-term coexistence in conditions predicted by positive low-density growth rates
+Verifying that parameters can result in long-term coexistence in conditions predicted by positive low-density growth rates *NOT CURRENTLY WORKING*
 ```{r long-term-coexistence}
 
 

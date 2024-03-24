@@ -8,7 +8,6 @@ Code used in the manuscript "Fluctuation-dependent coexistence of stage-structur
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(here)
-library(patchwork)
 
 ## ggplot theme
 theme_cw <- function () { 
@@ -95,7 +94,7 @@ partition.legend <- c(
   'ea' = expression(Delta^alpha),
   'eint' = expression(Delta^{alpha*lambda}),
   'storage' = expression(Delta^(alpha*lambda)), 
-  'nocov' = expression(Delta^{alpha!=lambda})
+  'nocov' = expression(Delta^{paste(alpha, "#", lambda)})
 )
 
 
@@ -103,14 +102,6 @@ cb_palette <- c("black", "#009E73", "#56B4E9", "#E69F00", "darkorchid4")
 cb_palette_long <- c("black", "#009E73", "#56B4E9", "#E69F00", "darkorchid4",
                             "#D55E00", "#0072B2")
 cb_palette_int <- c("black",  "darkorchid4", "#D55E00", "#0072B2")
-
-environmental_condition <- as_labeller(c(
-  opposite.consistent = "Opposite env favorable",
-  same.consistent = "Same env favorable \n competition stronger",
-  same.flipped = "Same env favorable \n competition weaker",
-  s.p = "Invader: Perennial \n Resident: Nonseedbanking Annual",
-  as = "Invader: Seedbanking Annual \n Resident: Nonseedbanking Annual"
-), )
 
 ```
 
@@ -120,6 +111,14 @@ Figure 2: Across environmental conditions, perennial and seedbanking annual as t
 part.sum.inv <- part.sum.all %>% 
   filter(sp.resident == 'an', 
          partition %in% c('full', 'e0', 'el', 'ea', 'eint'))
+
+environmental_condition <- as_labeller(c(
+  opposite.consistent = "Opposite env favorable",
+  same.consistent = "Same env favorable \n competition stronger",
+  same.flipped = "Same env favorable \n competition weaker",
+  s.p = "Invader: Perennial \n Resident: Nonseedbanking Annual",
+  as = "Invader: Seedbanking Annual \n Resident: Nonseedbanking Annual"
+))
 
 part.sum.inv %>% ggplot(aes(x = proportion.favorable)) +
   facet_grid(rows = vars(env.case), cols = vars(sp.invader), scales = "free",
@@ -134,10 +133,10 @@ part.sum.inv %>% ggplot(aes(x = proportion.favorable)) +
         legend.text.align = 0) +
   scale_color_manual(values = cb_palette, labels = partition.legend, name = '') +
   scale_fill_manual(values = cb_palette, labels = partition.legend, name = '') +
-  xlab ('Frequency of environment favorable for focal species\' density-independent growth') +
+  xlab ('Frequency of environment favorable for stage-structured species\' density-independent growth') +
   ylab('Partitioning of low density growth rate')
 
-# ggsave('mct-partitions_figure-3.pdf', width = 8.5, height = 8.5, units = 'in')
+# ggsave('mct-partitions_figure-2.pdf', width = 8.5, height = 8.5, units = 'in')
 ```
 
 
@@ -154,7 +153,7 @@ environmental_condition <- as_labeller(c(
   same.flipped = "Same env favorable \n competition weaker",
   s.p = "Invader: Nonseedbanking Annual \n Resident: Perennial",
   as = "Invader: Nonseedbanking Annual \n Resident: Seedbanking Annual"
-), )
+))
 
 part.sum.res %>% ggplot(aes(x = proportion.favorable)) +
   facet_grid(rows = vars(env.case), cols = vars(sp.resident), scales = "free",
@@ -169,10 +168,10 @@ part.sum.res %>% ggplot(aes(x = proportion.favorable)) +
         legend.text.align = 0) +
   scale_color_manual(values = cb_palette, labels = partition.legend, name = '') +
   scale_fill_manual(values = cb_palette, labels = partition.legend, name = '') +
-  xlab('Frequency of environment favorable for focal species\' density-independent growth') +
+  xlab('Frequency of environment favorable for stage-structured species\' density-independent growth') +
   ylab('Partitioning of low density growth rate')
 
-# ggsave('mct-partitions_figure-4.pdf', width = 8.5, height = 8.5, units = 'in')
+# ggsave('mct-partitions_figure-3.pdf', width = 8.5, height = 8.5, units = 'in')
 ```
 
 Supplemental figures
@@ -183,6 +182,15 @@ Supplemental figures
  part.sum.supp.2 <- part.sum.all %>% 
   filter(sp.resident == 'an',
          partition %in% c('full', 'eint', 'storage', 'nocov'))
+
+environmental_condition <- as_labeller(c(
+  opposite.consistent = "Opposite env favorable",
+  same.consistent = "Same env favorable \n competition stronger",
+  same.flipped = "Same env favorable \n competition weaker",
+  s.p = "Invader: Perennial \n Resident: Nonseedbanking Annual",
+  as = "Invader: Seedbanking Annual \n Resident: Nonseedbanking Annual"
+))
+
 
 part.sum.supp.2 %>% ggplot(aes(x = proportion.favorable)) +
   facet_grid(rows = vars(env.case), cols = vars(sp.invader), scales = "free",
@@ -197,7 +205,7 @@ part.sum.supp.2 %>% ggplot(aes(x = proportion.favorable)) +
         legend.text.align = 0) +
   scale_color_manual(values = cb_palette_int, labels = partition.legend, name = '') +
   scale_fill_manual(values = cb_palette_int, labels = partition.legend, name = '') +
-  xlab ('Frequency of environment favorable for focal species\' density-independent growth') +
+  xlab ('Frequency of environment favorable for stage-structured species\' density-independent growth') +
   ylab('Partitioning of low density growth rate')
 
 # ggsave('mct-partitions_figure-supp-2.pdf', width = 8.5, height = 8.5, units = 'in')
@@ -209,6 +217,14 @@ part.sum.supp.2 %>% ggplot(aes(x = proportion.favorable)) +
  part.sum.supp.3 <- part.sum.all %>% 
   filter(sp.invader == 'an',
          partition %in% c('full', 'eint', 'storage', 'nocov'))
+ 
+ environmental_condition <- as_labeller(c(
+  opposite.consistent = "Opposite env favorable",
+  same.consistent = "Same env favorable \n competition stronger",
+  same.flipped = "Same env favorable \n competition weaker",
+  s.p = "Invader: Nonseedbanking Annual \n Resident: Perennial",
+  as = "Invader: Nonseedbanking Annual \n Resident: Seedbanking Annual"
+))
 
 part.sum.supp.3 %>% ggplot(aes(x = proportion.favorable)) +
   facet_grid(rows = vars(env.case), cols = vars(sp.resident), scales = "free",
@@ -223,8 +239,165 @@ part.sum.supp.3 %>% ggplot(aes(x = proportion.favorable)) +
         legend.text.align = 0) +
   scale_color_manual(values = cb_palette_int, labels = partition.legend, name = '') +
   scale_fill_manual(values = cb_palette_int, labels = partition.legend, name = '') +
-  xlab ('Frequency of environment favorable for focal species\' density-independent growth') +
+  xlab ('Frequency of environment favorable for stage-structured species\' density-independent growth') +
   ylab('Partitioning of low density growth rate')
 
 # ggsave('mct-partitions_figure-supp-3.pdf', width = 8.5, height = 8.5, units = 'in')
 ```
+
+
+Explicitly depicting the Delta values as the Invader-Resident Comparison
+
+Corresponding to Figure 2, perennial or seedbanking annual invader and non-seedbanking annual resident. 
+```{r invader-resident}
+part.sum.inv.long <- part.sum.inv %>% 
+  pivot_longer(cols = c('delta.mean', 'inv.mean', 'res.mean', 'delta.sd', 'inv.sd', 'res.sd'),
+               names_to = 'names', values_to = 'value') %>%
+  separate_wider_delim(cols = 'names', delim = '.', names = c('epsilon', 'metric')) %>%
+  pivot_wider(names_from = metric, values_from = value)
+
+environmental_condition <- as_labeller(c(
+  s.p = "Invader: Perennial \n Resident: Nonseedbanking Annual",
+  as = "Invader: Seedbanking Annual \n Resident: Nonseedbanking Annual",
+  delta = "Delta",
+  inv = "Invader",
+  res = "Resident"
+))
+
+  
+# Same environment favorable, competition weaker in favorable environment
+part.sum.inv.same.flipped <- part.sum.inv.long %>% filter(env.case == 'same.flipped')
+
+part.sum.inv.same.flipped %>% ggplot(aes(x = proportion.favorable)) +
+  facet_grid(rows = vars(epsilon), cols = vars(sp.invader), scales = "fixed",
+             labeller = environmental_condition) +
+  geom_ribbon(alpha = 0.3, aes(ymin = mean - sd, 
+                               ymax = mean + sd,
+                               fill = partition)) +
+  geom_line(aes(y = mean, color = partition)) +
+  theme_cw() +
+  theme(strip.text = element_text(size = 13),
+        legend.position = c(0.05, 0.95),
+        legend.text.align = 0, 
+        legend.text = element_text(size = 10),
+        legend.key.size = unit(0.7, "lines")) +
+  guides(shape = guide_legend(override.aes = list(size = 0.9)),
+         color = guide_legend(override.aes = list(size = 0.9))) +
+  scale_color_manual(values = cb_palette, labels = partition.legend, name = '') +
+  scale_fill_manual(values = cb_palette, labels = partition.legend, name = '') +
+  xlab ('Frequency of environment favorable for stage-structured species\' density-independent growth') +
+  ylab('Partitioning of low density growth rate') +
+  ggtitle('Scenario 2: Same Environment Favorable; Competition Weaker')
+
+ ggsave('mct-partitions_figure-supp_dir-2a.pdf', width = 8.5, height = 8.5, units = 'in')
+
+# Same environment favorable, competition stronger in favorable environment
+part.sum.inv.same.consistent <- part.sum.inv.long %>% filter(env.case == 'same.consistent')
+
+part.sum.inv.same.consistent %>% ggplot(aes(x = proportion.favorable)) +
+  facet_grid(rows = vars(epsilon), cols = vars(sp.invader), scales = "fixed",
+             labeller = environmental_condition) +
+  geom_ribbon(alpha = 0.3, aes(ymin = mean - sd, 
+                               ymax = mean + sd,
+                               fill = partition)) +
+  geom_line(aes(y = mean, color = partition)) +
+  theme_cw() +
+  theme(strip.text = element_text(size = 13),
+        legend.position = c(0.05, 0.95),
+        legend.text.align = 0, 
+        legend.text = element_text(size = 10),
+        legend.key.size = unit(0.7, "lines")) +
+  guides(shape = guide_legend(override.aes = list(size = 0.9)),
+         color = guide_legend(override.aes = list(size = 0.9))) +
+  scale_color_manual(values = cb_palette, labels = partition.legend, name = '') +
+  scale_fill_manual(values = cb_palette, labels = partition.legend, name = '') +
+  xlab ('Frequency of environment favorable for stage-structured species\' density-independent growth') +
+  ylab('Partitioning of low density growth rate') +
+  ggtitle('Scenario 3: Same Environment Favorable; Competition Stronger')
+
+ ggsave('mct-partitions_figure-supp_dir-2b.pdf', width = 8.5, height = 8.5, units = 'in')
+
+
+```
+
+Corresponding to Figure 3, perennial or seedbanking annual resident and non-seedbanking annual invader. 
+```{r invader-resident-2}
+part.sum.res.long <- part.sum.res %>% 
+  pivot_longer(cols = c('delta.mean', 'inv.mean', 'res.mean', 'delta.sd', 'inv.sd', 'res.sd'),
+               names_to = 'names', values_to = 'value') %>%
+  separate_wider_delim(cols = 'names', delim = '.', names = c('epsilon', 'metric')) %>%
+  pivot_wider(names_from = metric, values_from = value)
+
+environmental_condition <- as_labeller(c(
+  s.p = "Invader: Nonseedbanking Annual \n Resident: Perennial",
+  as = "Invader: Nonseedbanking Annual \n Resident: Seedbanking Annual",
+  delta = "Delta",
+  inv = "Invader",
+  res = "Resident"
+))
+
+# smaller legend size
+addSmallLegend <- function(myPlot, pointSize = 0.5, textSize = 3, spaceLegend = 0.1) {
+  myPlot +
+    guides(shape = guide_legend(override.aes = list(size = pointSize)),
+           color = guide_legend(override.aes = list(size = pointSize))) +
+    theme(legend.title = element_text(size = textSize), 
+          legend.text  = element_text(size = textSize),
+          legend.key.size = unit(spaceLegend, "lines"))
+}
+
+  
+# Same environment favorable, competition weaker in favorable environment
+part.sum.res.same.flipped <- part.sum.res.long %>% filter(env.case == 'same.flipped')
+
+part.sum.res.same.flipped %>% ggplot(aes(x = proportion.favorable)) +
+  facet_grid(rows = vars(epsilon), cols = vars(sp.resident), scales = "free",
+             labeller = environmental_condition) +
+  geom_ribbon(alpha = 0.3, aes(ymin = mean - sd, 
+                               ymax = mean + sd,
+                               fill = partition)) +
+  geom_line(aes(y = mean, color = partition)) +
+  theme_cw() +
+  theme(strip.text = element_text(size = 13),
+        legend.position = c(0.05, 0.95),
+        legend.text.align = 0, 
+        legend.text = element_text(size = 10),
+        legend.key.size = unit(0.7, "lines")) +
+  guides(shape = guide_legend(override.aes = list(size = 0.9)),
+         color = guide_legend(override.aes = list(size = 0.9))) +
+  scale_color_manual(values = cb_palette, labels = partition.legend, name = '') +
+  scale_fill_manual(values = cb_palette, labels = partition.legend, name = '') +
+  xlab ('Frequency of environment favorable for stage-structured species\' density-independent growth') +
+  ylab('Partitioning of low density growth rate') +
+  ggtitle('Scenario 2: Same Environment Favorable; Competition Weaker')
+
+ ggsave('mct-partitions_figure-supp_dir-3a.pdf', width = 8.5, height = 8.5, units = 'in')
+
+# Same environment favorable, competition stronger in favorable environment
+part.sum.res.same.consistent <- part.sum.res.long %>% filter(env.case == 'same.consistent')
+
+part.sum.res.same.consistent %>% ggplot(aes(x = proportion.favorable)) +
+  facet_grid(rows = vars(epsilon), cols = vars(sp.resident), scales = "free",
+             labeller = environmental_condition) +
+  geom_ribbon(alpha = 0.3, aes(ymin = mean - sd, 
+                               ymax = mean + sd,
+                               fill = partition)) +
+  geom_line(aes(y = mean, color = partition)) +
+  theme_cw() +
+  theme(strip.text = element_text(size = 13),
+        legend.position = c(0.05, 0.95),
+        legend.text.align = 0, 
+        legend.text = element_text(size = 10),
+        legend.key.size = unit(0.7, "lines")) +
+  guides(shape = guide_legend(override.aes = list(size = 0.9)),
+         color = guide_legend(override.aes = list(size = 0.9))) +
+  scale_color_manual(values = cb_palette, labels = partition.legend, name = '') +
+  scale_fill_manual(values = cb_palette, labels = partition.legend, name = '') +
+  xlab ('Frequency of environment favorable for stage-structured species\' density-independent growth') +
+  ylab('Partitioning of low density growth rate') +
+  ggtitle('Scenario 3: Same Environment Favorable; Competition Stronger')
+
+ ggsave('mct-partitions_figure-supp_dir-3b.pdf', width = 8.5, height = 8.5, units = 'in')
+
+```
+
