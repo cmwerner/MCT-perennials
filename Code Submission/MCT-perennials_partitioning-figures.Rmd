@@ -113,7 +113,7 @@ part.sum.inv <- part.sum.all %>%
          partition %in% c('full', 'e0', 'el', 'ea', 'eint'))
 
 environmental_condition <- as_labeller(c(
-  opposite.consistent = "Opposite env favorable",
+  opposite_consistent = "Opposite env favorable",
   same.consistent = "Same env favorable \n competition stronger",
   same.flipped = "Same env favorable \n competition weaker",
   s.p = "Invader: Perennial \n Resident: Nonseedbanking Annual",
@@ -174,7 +174,7 @@ part.sum.res %>% ggplot(aes(x = proportion.favorable)) +
 # ggsave('mct-partitions_figure-3.pdf', width = 8.5, height = 8.5, units = 'in')
 ```
 
-Supplemental figures
+### Supplemental figures: Additional storage effect partitions
 ```{r supplemental-figure}
 # Supplemental figure matching Figure 2
 # With the additional partitions of the storage effect
@@ -246,7 +246,7 @@ part.sum.supp.3 %>% ggplot(aes(x = proportion.favorable)) +
 ```
 
 
-Explicitly depicting the Delta values as the Invader-Resident Comparison
+### Supplemental Figures: Explicitly depicting the Delta values as the Invader-Resident Comparison
 
 Corresponding to Figure 2, perennial or seedbanking annual invader and non-seedbanking annual resident. 
 ```{r invader-resident}
@@ -401,3 +401,8 @@ part.sum.res.same.consistent %>% ggplot(aes(x = proportion.favorable)) +
 
 ```
 
+### Supplemental Figures: Simulating coexistence
+
+Verifying that parameters can result in long-term coexistence in conditions predicted by positive low-density growth rates. "invader" and "resident" terms are somewhat arbitrary here as we're starting the species together. But I did also look at this where one species is introduced first to test for priority effects and didn't see any strong differences
+
+*Because these figures were simulated separately, the code of them is in the final section of the MCT-perennials_partitioning-code.Rmd file*

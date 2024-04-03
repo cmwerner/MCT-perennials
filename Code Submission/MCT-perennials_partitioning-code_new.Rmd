@@ -378,8 +378,8 @@ plot_gr <- function(df) { # plots population growth rates
 Set up reading in parameters, used in all the following sections of code
 ```{r parameters}
 # CHOOSE: This determines which coexistence pair we're looking at
-#case <- 'as'
-case <- 'p'
+case <- 'as'
+#case <- 'p'
 
 pair <- paste(case, 'an', sep = '.')
 
@@ -827,118 +827,164 @@ ggplot(partitions.env.long, aes(x = env.ratio, y = value, color = partition)) +
 
 ```
 
-Verifying that parameters can result in long-term coexistence in conditions predicted by positive low-density growth rates *NOT CURRENTLY WORKING*
+### Supplemental Figure: simulating coexistence
+
+Verifying that parameters can result in long-term coexistence in conditions predicted by positive low-density growth rates. "invader" and "resident" terms are somewhat arbitrary here as we're starting the species together. But I did also look at this where one species is introduced first to test for priority effects and didn't see any strong differences
 ```{r long-term-coexistence}
 
-
-time.warm.up <- 250
-time.full <- 1000
-
-# Starting both species at initially low values
-N0.1 <- 1/length(sp.1)
-N0.2 <- 1/length(sp.2)
-
-env.seq <- seq(0, 1, by = 0.1) # ratio of wet years to dry years
-
-# initialize dataframe
 coexistence.env <- tibble(sp.invader = character(), sp.resident = character(), 
-                          env.ratio = numeric())
+                          env.ratio = numeric(), time = numeric(),
+                          env.case = character(),
+                          an = numeric(), as = numeric(), 
+                          s = numeric(), p = numeric())
 
-# function to run coexistence invasion for a given env ratio and species,
-# returning average population sizes from the final 1/4 of the time series
-coexistence_run <- function(sp.invader, sp.resident, env.ratio, 
-                            time.warm.up, time.full, N0.i, N0.r) {
+for(favorable in c('opposite-consistent', 'same-consistent', 'same-flipped')){
   
-  env.draw <- rbinom(time.full, 1, env.ratio) 
-  env.condition <- if_else(env.draw > 0, 'wet','dry')
-  
-  # initializing dataframe
-  if(pair == 'as.an'){
-    n.all <- tibble(an = as.numeric(rep(NA, time.full)),
-                    as = as.numeric(rep(NA, time.full)))
-  } else if(pair == 'p.an'){
-    n.all <- tibble(an = as.numeric(rep(NA, time.full)),
-                    s = as.numeric(rep(NA, time.full)),
-                    p = as.numeric(rep(NA, time.full)))
+  for(case in c('p', 'as')){
+    pair <- paste(case, 'an', sep = '.')
+    
+    varying <- 'alpha'
+    
+    
+    # file names
+    file.core <- paste0(case, '_', varying, '-', favorable)
+    main.wd <- './'
+    file.in <- paste0(main.wd, 'model-parameters/model-parameters_', file.core, '.csv')
+    #file.out <- paste0(main.wd, 'model-data/mct-partitions_', file.core, '.RData')
+    
+    # SET PARAMETER VALUES 
+    pars <- read.csv(file.in) 
+    
+    
+    # select the relevant parameter set
+    if(pair == 'as.an') {
+      sp.1 <- 'an'
+      sp.2 <- 'as'
+      sp.order <- c('an','as')
+      pars <- pars %>% mutate(stem.surv = NULL) 
+      
+    }
+    if(pair == 'p.an'){
+      sp.1 <- 'an'
+      sp.2 <- c('s','p')
+      sp.order <- c('an','s','p')
+      pars <- pars %>% mutate(seed.surv = NULL)
+      
+    }
+    
+
+    time.full <- 1000
+    
+    # Starting both species at initially low values
+    N0.1 <- 1/length(sp.1)
+    N0.2 <- 1/length(sp.2)
+    
+    env.seq <- seq(0, 1, by = 0.1) # ratio of wet years to dry years
+    
+    # function to run coexistence invasion for a given env ratio and species,
+    # returning average population sizes from the final 1/4 of the time series
+    
+    coexistence_run <- function(sp.invader, sp.resident, env.ratio, 
+                                time.warm.up, time.full, N0.i, N0.r) {
+      
+      env.draw <- rbinom(time.full, 1, env.ratio) 
+      env.condition <- if_else(env.draw > 0, 'wet','dry')
+      
+      # initializing dataframes
+      if(pair == 'as.an'){
+        n.all <- tibble(an = as.numeric(rep(NA, time.full)),
+                        as = as.numeric(rep(NA, time.full)))
+      } else if(pair == 'p.an'){
+        n.all <- tibble(an = as.numeric(rep(NA, time.full)),
+                        s = as.numeric(rep(NA, time.full)),
+                        p = as.numeric(rep(NA, time.full)))
+      }
+      
+      # setting initial populations
+      n.all[1,sp.resident] <- N0.r 
+      n.all[1,sp.invader] <- N0.i
+      
+      for(t in 1:time.full){
+        # parameters for the varying env condition
+        p.env <- pars %>% filter(treatment == env.condition[t])
+        
+        # running invader and resident together
+        N0.together <- n.all[t,]
+        
+        # running one time step with the appropriate environmental parameters
+        n.res.impact <- pop_interactions(N0 = N0.together, param = p.env)
+        
+        # saving this output as the invader population and the impacted resident population
+        n.all[t+1,sp.resident] <- n.res.impact[sp.resident]
+        n.all[t+1,sp.invader] <- n.res.impact[sp.invader]
+      }
+      n.all$time <- 1:(time.full+1)
+      
+      # average of the last quarter of the time series
+      n.ave <- n.all %>% filter(time > time.full*3/4) %>%
+        colMeans() %>% as.list()
+      n.ave$env.ratio <- env.ratio
+      n.ave$sp.invader <- str_c(sp.invader, collapse = ".") # formatting
+      n.ave$sp.resident <- str_c(sp.resident, collapse = ".")
+      
+      return(n.ave)
+    }
+    
+    for(env.ratio in env.seq){
+      n.ave.1 <- coexistence_run(sp.invader = sp.1, sp.resident = sp.2, 
+                                 env.ratio, time.warm.up, time.full, 
+                                 N0.i = N0.1, N0.r = N0.2)
+      n.ave.tibble <- n.ave.1 %>% as_tibble() %>% 
+        add_column(env.case = favorable)
+      coexistence.env <- coexistence.env %>% add_row(n.ave.tibble)
+    }
   }
-  
-  # setting initial populations
-  n.all[1,sp.resident] <- N0.r 
-  n.all[1,sp.invader] <- 0
-  
-  # running just sp 1 at the beginning
-  for(t in 1:time.warm.up){
-     # parameters for the varying env condition
-    p.env <- pars %>% filter(treatment == env.condition[t])
-    
-    # running invader and resident together
-    N0.together <- n.all[t,]
-    
-    # running one time step with the appropriate environmental parameters
-    n.res.impact <- pop_interactions(N0 = N0.together, param = p.env)
-    
-    # saving this output as the invader population and the impacted resident population
-    n.all[t+1,sp.resident] <- n.res.impact[sp.resident]
-    n.all[t+1,sp.invader] <- n.res.impact[sp.invader]
-  }
-  
-  n.all[time.warm.up,sp.invader] <- N0.i
-  
-  for(t in time.warm.up:time.full){
-    # parameters for the varying env condition
-    p.env <- pars %>% filter(treatment == env.condition[t])
-    
-    # running invader and resident together
-    N0.together <- n.all[t,]
-    
-    # running one time step with the appropriate environmental parameters
-    n.res.impact <- pop_interactions(N0 = N0.together, param = p.env)
-    
-    
-    # saving this output as the invader population and the impacted resident population
-    n.all[t+1,sp.resident] <- n.res.impact[sp.resident]
-    n.all[t+1,sp.invader] <- n.res.impact[sp.invader]
-  }
-  n.all$time <- 1:(time.full+1)
-#  n.all %>% plot_invasion() %>% print()
-  
-  # average of the last quarter of the time series
-  n.ave <- n.all %>% filter(time > time.full*3/4) %>%
-   colMeans() %>% as.list()
-  n.ave$env.ratio <- env.ratio
-  n.ave$sp.invader <- sp.invader
-  n.ave$sp.resident <- sp.resident
-  
-  return(n.ave)
 }
 
+#print(coexistence.env)
 
-for(env.ratio in env.seq){
-  # run with sp.1 initialized first
-  n.ave.1 <- coexistence_run(sp.invader = sp.1, sp.resident = sp.2, 
-                             env.ratio, time.warm.up, time.full, 
-                             N0.i = N0.1, N0.r = N0.2)
-  coexistence.env <- rbind(coexistence.env, n.ave.1)
-  # repeat with sp.2 initialized first
-  n.ave.2 <- coexistence_run(sp.invader = sp.2, sp.resident = sp.1, 
-                             env.ratio, time.warm.up, time.full, 
-                             N0.i = N0.2, N0.r = N0.1)
-  coexistence.env <- rbind(coexistence.env, n.ave.2)
-}
+species.list <- c("an", "as", "s.p")
+
+coexist.env.long <- coexistence.env %>%
+  mutate(s.p = p + s, .keep = "unused") %>% 
+  pivot_longer(cols = species.list, names_to = "sp", values_to = "population") %>%
+  drop_na() 
+
+coexist.env.long$env.case <- coexist.env.long$env.case %>% str_replace_all("-",".")
 
 
-print(coexistence.env)
 
-coexist.env.long <- coexistence.env %>% pivot_longer(cols = c(sp.1, sp.2), names_to = "sp", values_to = "population")
+environmental_condition <- as_labeller(c(
+  opposite.consistent = "Opposite env favorable",
+  same.consistent = "Same env favorable \n competition stronger",
+  same.flipped = "Same env favorable \n competition weaker",
+  s.p = "Perennial and \n Nonseedbanking Annual",
+  as = "Seedbanking Annual and \n Nonseedbanking Annual"
+))
+
+species.legend <- c(
+  "an" = "Nonseedbanking Annual",
+  "as" = "Seedbanking Annual",
+  "s.p" = "Perennial"
+)
+
+species.palette <- c("springgreen3", "orangered3", "slateblue4")
 
 ggplot(coexist.env.long, aes(x = env.ratio, y = population, color = sp)) +
-  facet_grid(cols = vars(sp.invader),
-             labeller = labeller(sp.invader = species_names)) + 
-  geom_line() +
+  facet_grid(rows = vars(env.case), cols = vars(sp.resident), scales = "free",
+             labeller = environmental_condition) +
+  geom_line(size = 1.1) +
   theme_cw() +
-  xlab('Proportion wet years') +
-  ylab('Population')
+  theme(strip.text = element_text(size = 13),
+        legend.position = c(0.86, 0.97),
+        legend.text.align = 0,
+        legend.text = element_text(size = 11),
+        legend.key.size = unit(0.8, "lines")) +
+  scale_color_manual(values = species.palette, labels = species.legend, name = '') +
+  xlab('Frequency of environment favorable for stage-structured species\' density-independent growth') +
+  ylab('Population Size')
 
+ ggsave('mct-partitions_figure-supp_coexist.pdf', width = 8.5, height = 8.5, units = 'in')
 
 
 ```
