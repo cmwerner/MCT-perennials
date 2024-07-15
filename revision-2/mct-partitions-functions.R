@@ -226,9 +226,9 @@ run_varying <- function(sp.invader, sp.resident, parameters, env.cond,
     select(!c(all_of(alpha.columns),'species','treatment')) %>% 
     names()
   
-  # # environmental condition vectors for the no covariance option TO DO: MAY NEED TO CHANGE
+  # environmental condition vectors for the no covariance option
+  # randomizes lambda columns to break the lambda - alpha covariance
   env.lambda <- sample(env.cond, size = length(env.cond), replace = FALSE)
-  env.alpha <- sample(env.cond, size = length(env.cond), replace = FALSE)
   
   
   # running the resident and invader for the remaining time steps
@@ -250,13 +250,11 @@ run_varying <- function(sp.invader, sp.resident, parameters, env.cond,
       p.env[,alpha.columns] <- p.ave[,alpha.columns]
     }
     
-    # parameters for no covariance between alpha and lambda 
-    # TO DO: THIS PROBABLY NEEDS TO CHANGE?
+    # parameters for no covariance between alpha and lambda
+    # randomizes lambda columns to break the lambda - alpha covariance
     if(covary == FALSE){
       lambda.env  <- parameters %>% filter(treatment == env.lambda[t])
-      alpha.env <- parameters %>% filter(treatment == env.alpha[t])
       p.env[,lambda.columns] <- lambda.env[,lambda.columns]
-      p.env[,alpha.columns] <- alpha.env[,alpha.columns]
     }
     
     

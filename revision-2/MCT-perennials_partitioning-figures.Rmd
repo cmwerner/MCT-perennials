@@ -2,7 +2,7 @@
 title: "MCT-Perennials_partitioning-code"
 output: html_document
 ---
-Code used in the manuscript "Fluctuation-dependent coexistence of stage-structured species" to generate figures from the output of the simulation runs. Simulations and partitions were run on a computer cluster and this code is included in the "mct-partitions-functions.R" and "mct-partitions-run.R" files. 
+Code used in the manuscript "Fluctuation-dependent coexistence of stage-structured species" to generate figures from the output of the simulation runs. This output data of the simulation runs is provided in the model-data folder as .RData files. Simulations and partitions were run on a computer cluster and this code is included in the "mct-partitions-functions.R" and "mct-partitions-run.R" files. 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)

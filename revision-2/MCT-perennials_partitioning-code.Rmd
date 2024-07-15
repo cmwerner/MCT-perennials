@@ -16,7 +16,7 @@ theme_cw <- function () {
     theme(
       panel.background = element_blank(), 
       plot.background = element_blank(), 
-      axis.ticks = element_line(colour = "grey70", size = rel(0.5)),
+      axis.ticks = element_line(colour = "grey70", linewidth = rel(0.5)),
       panel.grid.minor = element_blank(), 
       panel.grid.major.x = element_blank(),
       legend.background = element_blank(), 
@@ -268,9 +268,9 @@ run_varying <- function(sp.invader, sp.resident, parameters, env.cond,
     select(!c(all_of(alpha.columns),'species','treatment')) %>% 
     names()
   
-  # # environmental condition vectors for the no covariance option 
+  # environmental condition vectors for the no covariance option
+  # randomizes lambda columns to break the lambda - alpha covariance
   env.lambda <- sample(env.cond, size = length(env.cond), replace = FALSE)
-  env.alpha <- sample(env.cond, size = length(env.cond), replace = FALSE)
   
   
   # running the resident and invader for the remaining time steps
@@ -292,12 +292,11 @@ run_varying <- function(sp.invader, sp.resident, parameters, env.cond,
       p.env[,alpha.columns] <- p.ave[,alpha.columns]
     }
     
-    # parameters for no covariance between alpha and lambda 
+    # parameters for no covariance between alpha and lambda
+    # randomizes lambda columns to break the lambda - alpha covariance
     if(covary == FALSE){
       lambda.env  <- parameters %>% filter(treatment == env.lambda[t])
-      alpha.env <- parameters %>% filter(treatment == env.alpha[t])
       p.env[,lambda.columns] <- lambda.env[,lambda.columns]
-      p.env[,alpha.columns] <- alpha.env[,alpha.columns]
     }
     
     
@@ -850,7 +849,6 @@ for(favorable in c('opposite-consistent', 'same-consistent', 'same-flipped')){
     file.core <- paste0(case, '_', varying, '-', favorable)
     main.wd <- './'
     file.in <- paste0(main.wd, 'model-parameters/model-parameters_', file.core, '.csv')
-    #file.out <- paste0(main.wd, 'model-data/mct-partitions_', file.core, '.RData')
     
     # SET PARAMETER VALUES 
     pars <- read.csv(file.in) 
@@ -1000,7 +998,7 @@ ggplot(coexist.env.long, aes(x = proportion.favorable, y = population, color = s
   xlab('Frequency of environment favorable for stage-structured species\' density-independent growth') +
   ylab('Population Size')
 
- ggsave('mct-partitions_figure-supp_coexist.pdf', width = 8.5, height = 8.5, units = 'in')
+ ggsave('figures/mct-partitions_figure-supp_coexist.pdf', width = 8.5, height = 8.5, units = 'in')
 
 
 ```
