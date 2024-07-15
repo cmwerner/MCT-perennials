@@ -1,9 +1,8 @@
 ---
-title: "partitioning_general"
+title: "partitioning_general_clean"
 output: html_document
 ---
-
-Goal is to look at the strength of the storage effect in seedbanking annual (AS) and nonseedbanking annual (AN) species interactions. We want to measure how the storage effect [and the relative strength of storage effect:relative nonlinearity] changes with 1. magnitude of envrionmental variation 2. autocorrelation of environmental variation *This is the testing version to figure out what's going on with the tri-modal pattern in the resident mean log growth rates*
+Goal is to look at the strength of the storage effect in seedbanking annual (AS) and nonseedbanking annual (AN) species interactions. We want to measure how the storage effect [and the relative strength of storage effect:relative nonlinearity] changes with 1. magnitude of envrionmental variation 2. autocorrelation of environmental variation 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -32,12 +31,11 @@ theme_cw <- function () {
 
 ## Parameters and set up
 
-This step defines which coexistence pair we're looking at, seedbanking annual with non-seedbanking annual, or perennial with non-seedbanking annual. Then sets parameters we're going to use for alpha and lambda under different environmental conditions.
+This step defines which coexistence pair we're looking at, seedbanking annual with non-seedbanking annual, or perennial with non-seedbanking annual. Then sets parameters we're going to use for alpha and lambda under different environmental conditions. 
 
 For the seedbanking annual with non-seedbanking annual interaction, uses lambda and alpha values for avena (as our AN) and erodium (as our AS) from Hallett et al. 2019 Ecology Letters paper, using the "wet" treatment as our wet environment and the "dry" treatment for our dry environment. Also going to use the seedbank parameters for as listed in that ms, which references Rice 1985, and simplifying the an to being non-seedbanking (so shifting its survival in the seed bank proportion from 0.4 to 0) *Note: planning to simplify this to be more about theoretical expectations*
 
-For the perennial with non-seedbanking annual interaction, uses the theoretical parameters.
-
+For the perennial with non-seedbanking annual interaction, uses the theoretical parameters. 
 ```{r parameters}
 
 # seedbanking annual - nonseedbanking annual parameters
@@ -50,8 +48,7 @@ pars.p.an <- read.csv(here('model-parameters/model-parameters_p_lambda-same.csv'
 
 ```
 
-Functions for one step of species interaction calculations. Trying to make it general to whether it's both species present or just one--if it's one, that population is just at 0. Takes in the full parameter df for all the species (just for one environmental condition though) and a list of species population sizes. If it's just one species running to equilibrium then it's N0 will be 0.
-
+Functions for one step of species interaction calculations. Trying to make it general to whether it's both species present or just one--if it's one, that population is just at 0. Takes in the full parameter df for all the species (just for one environmental condition though) and a list of species population sizes. If it's just one species running to equilibrium then it's N0 will be 0. 
 ```{r species-interactions}
 pop_interactions <- function(N0, param){
   
@@ -107,12 +104,11 @@ pop_interactions <- function(N0, param){
 
 ## Running models
 
-Partition to run the invasion, starting with one resident species (sp.resident) running on its own for init.time.steps starting at a population size of N0.r, and then invading sp.invader in from a total population size of 1 at each of the remaining time steps up to total.time.steps. Takes in a vector env.cond of environmental conditions. Currently only supports 2 different environmental states.
+Partition to run the invasion, starting with one resident species (sp.resident) running on its own for init.time.steps starting at a population size of N0.r, and then invading sp.invader in from a total population size of 1 at each of the remaining time steps up to total.time.steps. Takes in a vector env.cond of environmental conditions. Currently only supports 2 different environmental states. 
 
-Coded so that sp.invader and sp.resident parameters can be either a single value (ex: 'a') for a species with a single life stage or multiple values (ex: c('s','p')) for a species with multiple life stages.
+Coded so that sp.invader and sp.resident parameters can be either a single value (ex: 'a') for a species with a single life stage or multiple values (ex: c('s','p')) for a species with multiple life stages. 
 
 Has the options to vary lambda parameters with the environment (verus using the average), vary alpha parameters with the environment (versus using the average), and allowing lambda and alpha to covary (vs being sampled independently). For partitions where lambda is set to not vary, also sets germination and survival terms to not vary.
-
 ```{r running-invasion}
 run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
                          vary.lambda = TRUE, vary.alpha = TRUE, covary = TRUE,
@@ -151,6 +147,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
     names()
   
   # environmental condition vectors for the no covariance option
+  # THIS WOULD NEED TO BE UPDATED FOR AUTOCORRELATION
   env.lambda <- sample(env.cond, size = length(env.cond), replace = FALSE)
   env.alpha <- sample(env.cond, size = length(env.cond), replace = FALSE)
   
@@ -187,7 +184,7 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
   if(length(sp.invader) > 1) {
 
     n.inv.start <- 1/length(sp.invader)
-    n.old <- n.all[init.time.steps,]  
+    n.old <- n.all[init.time.steps,]  ## NOTE THIS IS FROM A SINGLE TIME POINT NOT THE AVERAGE
     n.old[sp.invader] <- n.inv.start
     n.old.inv <- n.inv.start[1]
     change <- 1
@@ -286,7 +283,6 @@ run_invasion <- function(sp.invader, sp.resident, N0.r, parameters, env.cond,
 ```
 
 Plotting function so we can visualize what's going on with the different types of variation
-
 ```{r plotting-function}
 plot_invasion <- function(df){ # plots actual population sizes
   df.long <- df %>% 
@@ -323,347 +319,8 @@ plot_gr <- function(df) { # plots population growth rates
 }
 ```
 
-# Running and plotting invasions
-
-*Don't re-run this, just skip to the next step to load it* Full variation with multiple runs for troubleshooting (no partitioning). This saves at the end and loads at the next step so we don't have to rerun it for time.
-
-```{r full-multiple-runs}
-
-time.warm.up <- 50
-time.full <- 200
-
-case <- 'p'
-
-pair <- paste(case, 'an', sep = '.')
-
-# select the relevant parameter set
-if(pair == 'as.an') {
-  sp.1 <- 'an'
-  sp.2 <- 'as'
-  sp.order <- c('an','as') 
-  pars <- pars.as.an 
-}
-
-if(pair == 'p.an'){
-  sp.1 <- 'an'
-  sp.2 <- c('s','p')
-  sp.order <- c('an','s','p')
-  pars <- pars.p.an
-}
-
-  sp.1.name <- paste(sp.1, collapse = '.')
-  sp.2.name <- paste(sp.2, collapse = '.')
-  
-invade.runs <- tibble()
-
-env.ratio <- 0.5
-
-pars <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1-env.ratio))
-
-pars.ave <- pars %>% 
-    group_by(species) %>%
-    summarise_if(is.numeric,
-                 ~ weighted.mean(., weight)) %>%
-  mutate(weight = NA, treatment = 'average') %>% 
-  arrange(factor(species, levels = sp.order))  # need to keep them in the right order for later
-
-for(i in 1:12){
-  # two equally probable environmental conditions
-env.draw <- rbinom(time.full, 1, env.ratio) 
-env.condition <- if_else(env.draw > 0, 'wet','dry')
-
-pars <- pars %>% full_join(pars.ave)
-
-#invade.1 <-  run_invasion(sp.invader = sp.1, sp.resident = sp.2, N0.r = 100, 
-#                         parameters = pars, env.cond = env.condition,
-#                         vary.lambda = TRUE, vary.alpha = TRUE, 
-#                         init.time.steps = time.warm.up, total.time.steps = time.full) %>%
-#  add_column(inv = sp.1.name, res = sp.2.name, run = i, env = env.condition) %>%
-#  filter(time > time.warm.up + 1)
-
-invade.2 <-  run_invasion(sp.invader = sp.2, sp.resident = sp.1,
-                               N0.r = 100, parameters = pars, env.cond = env.condition,
-                               init.time.steps = time.warm.up, total.time.steps = time.full,
-                               vary.lambda = TRUE, vary.alpha = TRUE) %>%
-  add_column(inv = sp.2.name, res = sp.1.name, run = i, env = env.condition) %>%
-  filter(time < time.warm.up)
-
-
-# invade.both <- bind_rows(invade.1, invade.2)
-
-#invade.runs <- bind_rows(invade.runs, invade.both)
-invade.runs <- bind_rows(invade.runs, invade.2)
-}
-
-
-# save(invade.runs, file = "testing_trimodal.Rdata")
-
-```
-
-Loading in the file from above so we can run tests on it. One note: the longer I run the runs for (number of time steps) the closer the two "wings" get to 0. So for 200 time steps they were around plus/minus 0.015, and with 400 time steps they're around plus/minus 0.005. On a separate test I ran each one for 1000 time steps and it's around plus/minus 0.002, but still clearly tri-modal.
-
-```{r testing-trimodal}
-
-#load(file = "testing_trimodal.Rdata")
-#load(file = "testing_trimodal_as.Rdata")
-
-sp.res.gr <- invade.runs %>% group_by(inv, res, run) %>%
-  dplyr::summarise(
-    gr.an.log.mean = mean(log(gr.an)),
-    gr.an.mean = mean(gr.an)
-  ) %>% filter(res == 'an')
-
-sp.res <- invade.runs %>% filter(res == 'an')
-sp.res <- droplevels(sp.res)
-hist(sp.res$gr.an) # not tri-modal if we just take the means
-hist(log(sp.res$gr.an))
-
-
-sp.res.gr2 <- sp.res %>% group_by(run) %>%
-    dplyr::summarise(
-    gr.an.log.mean = mean(log(gr.an)),
-    gr.an.mean = mean(gr.an)
-  )
-  
-
-hist(sp.res.gr$gr.an.mean) # not tri-modal if we just take the means
-hist(sp.res.gr$gr.an.log.mean) # tri-modal if we take the means of the logs
-which(sp.res.gr$gr.an.log.mean > 0.004)
-which(sp.res.gr$gr.an.log.mean < -0.004)
-
-
-# plotting options that have mean growth rates in the different groups
-# numbers would need to be changed for the an-as comparison
-# based on above results of which is in which group
-test.1 <- filter(invade.runs, run == 1, res == 'an')
-test.3 <- filter(invade.runs, run == 3, res == 'an')
-test.11 <- filter(invade.runs, run == 11, res == 'an')
-
-# plotting log growth rates -- nothing seems to be different between these different runs
-plot_gr(test.1)
-plot_gr(test.3)
-plot_gr(test.11)
-
-# looking at the histograms of the growth rates (not logged) for these different ones
-# looks bi-modal when generalized but with finer breaks is actually split into
-# 4 sections. This seems to make sense matching the patterns of growth we see in the graphs
-hist(test.1$gr.an, ylim = c(0, 250), breaks = seq(0,8, by=0.125)) 
-hist(test.3$gr.an, ylim = c(0, 250), breaks = 30)
-hist(test.11$gr.an, ylim = c(0, 250), breaks = 30)
-
-# log growth rates within individual runs are generally tri-modal
-# although with finer breaks again it may actually be 5 sections
-hist(log(test.1$gr.an), ylim = c(0, 250), breaks = 30) 
-hist(log(test.3$gr.an), ylim = c(0, 250), breaks = 30)
-hist(log(test.11$gr.an), ylim = c(0, 250), breaks = 30)
-
-mean(log(test.1$gr.an), na.rm = TRUE) # high
-mean(log(test.3$gr.an), na.rm = TRUE) # near 0
-mean(log(test.11$gr.an), na.rm = TRUE) # low
-
-# no clear difference between these 3 that would be causing the difference in means,
-# other than there just being more or fewer of the different growth rate groups?
-
-mean(log(test.1[test.1$time > 200,]$gr.an)) # high
-mean(log(test.3[test.3$time > 200,]$gr.an)) # low
-mean(log(test.11[test.11$time > 200,]$gr.an)) # near 0
-
-# the means change if we subset the data, with test.3 and test.11 switching groups
-# I still don't understand why it doesn't end up being uni-modal
-
-```
-
-Is this because of within run structure? What if we permute run labels?
-
-```{r permuting labels}
-
-load(file = "testing_trimodal.Rdata")
-sp.res <- invade.runs %>% filter(res == 'an')
-sp.res <- droplevels(sp.res)
-fakeruns <- sample(20, 6980, replace=TRUE)
-sp.res <- cbind(sp.res, fakeruns)
-
-hist(sp.res$gr.an) # not tri-modal if we just take the means
-hist(log(sp.res$gr.an))
-
-sp.res.gr2 <- sp.res %>% group_by(fakeruns) %>%
-    dplyr::summarise(
-    gr.an.log.mean = mean(log(gr.an)),
-    gr.an.mean = mean(gr.an)
-  )
-  
-
-hist(sp.res.gr2$gr.an.mean) # not tri-modal if we just take the means
-hist(sp.res.gr$gr.an.log.mean) # NOT tri-modal if we permute the labels
-which(sp.res.gr$gr.an.log.mean > 0.004)
-which(sp.res.gr$gr.an.log.mean < -0.004)
-
-xx <- acf(test.1$gr.an) # strong lag-1 negative correlation
-acf(test.11$gr.an)
-
-# if we break this, I'll bet we don't get the autocorrelation
-gr.ex <- sample(sp.res$gr.an, 6980, replace=FALSE)
-fake.data <- data.frame(gr.ex, sp.res$run, sp.res$time)
-colnames(fake.data) <- c("gr.an", "run", "time")
-
-fake.test.1 <- filter(fake.data, run == 1)
-fake.test.3 <- filter(fake.data, run == 3)
-fake.test.11 <- filter(fake.data, run == 11)
-
-fake.xx <- acf(fake.test.1$gr.an) # strong lag-1 negative correlation
-acf(fake.test.11$gr.an)
-
-sp.res.gr3 <- fake.data  %>% group_by(run) %>%
-    dplyr::summarise(
-    gr.an.log.mean = mean(log(gr.an)),
-    gr.an.mean = mean(gr.an)
-  )
-
-hist(sp.res.gr3$gr.an.mean) # not tri-modal if we just take the means
-hist(sp.res.gr3$gr.an.log.mean)
-
-```
-
-Ok, so it seems to be something about model and the timeseries structure. I want to dive into that a little bit more...
-
-```{r environmental dive}
-env.series <- rep(NA, dim(sp.res)[1])
-counter <- 1
-
-for (xx in 1:20) {
-  tempdata <- filter(sp.res, run == xx)
-  counter <- counter + 1 # counting for the first timepoint per run
-  for (yy in 2:dim(tempdata)[1]) {
-    env.series [counter] <- paste(tempdata$env[yy-1], 
-                                  tempdata$env[yy], sep ="_")
-    counter <- counter + 1
-  }
-}
-
-sp.res.env <- cbind(sp.res, env.series)
-
-# there are all about the same, which is correct and makes sense
-# so why is there this neg. ar(1) autocorrelation?
-length(which(sp.res.env$env.series == "dry_wet"))
-length(which(sp.res.env$env.series == "dry_dry"))
-length(which(sp.res.env$env.series == "wet_wet"))
-length(which(sp.res.env$env.series == "wet_dry"))
-
-dry_wet <- filter(sp.res.env, env.series == "dry_wet")
-hist(dry_wet$gr.an) # hmm, that's bimodal
-
-wet_wet <- filter(sp.res.env, env.series == "wet_wet")
-hist(wet_wet$gr.an) # hmm, that's trimodal?...
-
-wet_dry <- filter(sp.res.env, env.series == "wet_dry")
-hist(wet_dry$gr.an) # hmm, that's also trimodal. Looks almost identical to above
-
-dry_dry <- filter(sp.res.env, env.series == "dry_dry")
-hist(dry_dry$gr.an) # hmm, that's bimodal. Looks a ton like dry_wet
-
-# Does it depend on the last 3 conditions?...
-env.series.long <- rep(NA, dim(sp.res)[1])
-counter <- 1
-
-for (xx in 1:20) {
-  tempdata <- filter(sp.res, run == xx)
-  counter <- counter + 2 # counting for the first timepoint per run
-  for (yy in 3:dim(tempdata)[1]) {
-    env.series.long [counter] <- paste(tempdata$env[yy-2],
-                                  tempdata$env[yy-1], 
-                                  tempdata$env[yy], sep ="_")
-    counter <- counter + 1
-  }
-}
-
-sp.res.env.long <- cbind(sp.res.env, env.series.long)
-
-# these should all be about 870ish long
-# looks good
-ggplot(sp.res.env.long) +
-  geom_bar(aes(as.factor(env.series.long)))
-
-wet_dry_dry <- filter(sp.res.env.long, env.series.long == "wet_dry_dry")
-hist(wet_dry_dry$gr.an) # bimodal, but all between .12 and .16
-
-wet_dry_wet <- filter(sp.res.env.long, env.series.long == "wet_dry_wet")
-hist(wet_dry_wet$gr.an) # bimodal, but all between .12 and .16
-
-wet_wet_wet <- filter(sp.res.env.long, env.series.long == "wet_wet_wet")
-hist(wet_wet_wet$gr.an) # all close to 1 (range 1-1.28)
-
-wet_wet_dry <- filter(sp.res.env.long, env.series.long == "wet_wet_dry")
-hist(wet_wet_dry$gr.an) # all close to 1 (range 1-1.28)
-
-dry_dry_dry <- filter(sp.res.env.long, env.series.long == "dry_dry_dry")
-hist(dry_dry_dry$gr.an) # all close to 1 (range .8-1)
-
-dry_dry_wet <- filter(sp.res.env.long, env.series.long == "dry_dry_wet")
-hist(dry_dry_wet$gr.an) # all close to 1 (range .8-1)
-
-dry_wet_wet <- filter(sp.res.env.long, env.series.long == "dry_wet_wet")
-hist(dry_wet_wet$gr.an) # all high and trimodal (range 6.5-8)
-
-dry_wet_dry <- filter(sp.res.env.long, env.series.long == "dry_wet_dry")
-hist(dry_wet_dry$gr.an) # all high and trimodal (range 6.5-8)
-
-# it seems like y-2 and y-1 matter for determining growth rate
-# so let's plot that coloring by y-2 and y-1
-# this was probably all we needed to do, not all the stuff above
-# oh well...
-ggplot(sp.res.env.long) +
-  geom_histogram(aes(gr.an, fill=as.factor(env.series.long), aes=0.5))
-
-
-  
-
-```
-
-
-What about when the perennial species is the resident?
-
-```{r testing-trimodal-sp}
-load(file = "testing_trimodal.Rdata")
-
-sp.res.gr <- invade.runs %>% group_by(inv, res, run) %>%
-  dplyr::summarise(
-    gr.sp.log.mean = mean(log(gr.s.p)),
-    gr.sp.mean = mean(gr.s.p),
-  ) %>% filter(res == 's.p')
-
-hist(sp.res.gr$gr.sp.mean) # not tri-modal if we just take the means
-hist(sp.res.gr$gr.sp.log.mean) # trimodal
-
-```
-
-What about when the seedbanking annual is the resident?
-
-```{r testing-trimodal-sp}
-load(file = "testing_trimodal_as.Rdata")
-
-sp.res.gr <- invade.runs %>% group_by(inv, res, run) %>%
-  dplyr::summarise(
-    gr.as.log.mean = mean(log(gr.as)),
-    gr.as.mean = mean(gr.as),
-  ) %>% filter(res == 'as')
-
-hist(sp.res.gr$gr.as.mean) # not tri-modal if we just take the means
-hist(sp.res.gr$gr.as.log.mean) # NOT tri-modal
-
-# so what's different here? 
-test.1 <- filter(invade.runs, run == 1, res == 'as')
-plot_gr(test.1)
-hist(log(test.1$gr.as), ylim = c(0, 250), breaks = 0) 
-# individual time step growth rates are not multi-modal either
-
-```
-
-# NOT USED -- ISSUES ARE IN FULL RUNS, BEFORE THE PARTITION STEPS
-
-# Calculating partitions
-
+# Calculating partitions 
 Function to calculate partitions for a given invader and resident
-
 ```{r partition-function}
 partition_epsilons <- function(sp.inv, sp.res, pars, 
                                env.condition, time.warm.up, time.full){
@@ -793,7 +450,6 @@ partition_epsilons <- function(sp.inv, sp.res, pars,
 ```
 
 Running that partition function *This would get split into a separate script to run on Teton computing cluster*
-
 ```{r partition-run}
 
 # CHOOSE: This determines which coexistence pair we're looking at
@@ -802,11 +458,11 @@ Running that partition function *This would get split into a separate script to 
 
 pair <- paste(case, 'an', sep = '.')
 
-varying <- 'lambda'
-#varying <- 'alpha'
+#varying <- 'lambda'
+varying <- 'alpha'
 
-favorable <- 'same'
-# favorable <- 'same-consistent'
+#favorable <- 'same'
+ favorable <- 'same-consistent'
 # favorable <- 'opposite-consistent'
 # favorable <- 'same-flipped'
 # favorable <- 'opposite-flipped'
@@ -814,30 +470,33 @@ favorable <- 'same'
 # file names
 
 file.core <- paste0(case, '_', varying, '-', favorable)
-main.wd <- '/project/coexistence/cwerner5/'  # needs to be updated
+#main.wd <- '/project/coexistence/cwerner5/'  # needs to be updated (ideally with here() package)
+ main.wd <- './'
 
 file.in <- paste0(main.wd, 'model-parameters/model-parameters_', file.core, '.csv')
 
-file.out <- paste0(main.wd, 'model-data/mct-partitions_', file.core, '.RData')
+file.out <- paste0(main.wd, 'model-data/mct-partitions_', 'autocorrelation_', file.core, '.RData')
 
 # SET PARAMETER VALUES 
-pars <- read.csv(file.in) %>% # THIS NEEDS TO BE GENERALIZED
-  mutate(stem.surv = NULL) 
+pars <- read.csv(file.in) 
 
 
 # select the relevant parameter set
 if(pair == 'as.an') {
   sp.1 <- 'an'
   sp.2 <- 'as'
-  sp.order <- c('an','as') 
+  sp.order <- c('an','as')
+pars <- pars %>% mutate(stem.surv = NULL) 
 }
 if(pair == 'p.an'){
   sp.1 <- 'an'
   sp.2 <- c('s','p')
   sp.order <- c('an','s','p')
+pars <- pars %>% mutate(seed.surv = NULL)
 }
 
 env.ratio <- 0.5 # ratio of wet years to dry years
+env.auto <- -0.8 # autocorrelation of environment
 
 # adding rows for the weighted average of the parameters
 pars <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1-env.ratio))
@@ -858,7 +517,21 @@ time.full <- 300
 # Also probably get it set up to work on Teton to save time
 
 # Environmental conditions
-env.draw <- rbinom(time.full, 1, env.ratio) # sequence of the environment (NOTE: would want this to change if doing multiple runs)
+# ADDED IN AUTOCORRELATION WHICH WILL WORK FOR ALL THE PARTITIONS EXCEPT THE STORAGE EFFECT ONE
+env.from.a <- env.ratio + env.auto/2 # symmetrical autocorrelation--likelihood of going to a from a
+env.from.b <- env.ratio - env.auto/2 # likelihood of going to a from b
+
+env.draw.a <- rbinom(time.full, 1, env.from.a) # env list if coming from a wet year (a)
+env.draw.b <- rbinom(time.full, 1, env.from.b) # env list of coming from a dry year (b)
+
+env.draw <- vector(length = time.full)
+env.draw[1] <- rbinom(1, 1, env.ratio)
+for(i in 2:time.full){
+  env.draw[i] <- ifelse(env.draw[i-1]==1, env.draw.a[i], env.draw.b[i])
+}
+
+#env.draw <- rbinom(time.full, 1, env.ratio) # sequence of the environment 
+
 env.condition <- if_else(env.draw > 0, 'wet','dry')
 
 partitions <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars, 
@@ -914,76 +587,110 @@ ggplot(partitions, aes(x = partition, y = delta, fill = partition)) +
 ```
 
 Not used: Running over an environmental sequence instead of a particular env.ratio. This was used for testing before running on the computer cluster
-
 ```{r env-seq}
-# This determines which coexistence pair we're looking at
-pair <- 'as.an'
-#pair <- 'p.an'
+# CHOOSE: This determines which coexistence pair we're looking at
+#case <- 'as'
+ case <- 'p'
+
+pair <- paste(case, 'an', sep = '.')
+
+#varying <- 'lambda'
+varying <- 'alpha'
+
+#favorable <- 'same'
+ favorable <- 'same-consistent'
+# favorable <- 'opposite-consistent'
+# favorable <- 'same-flipped'
+# favorable <- 'opposite-flipped'
+
+# file names
+
+file.core <- paste0(case, '_', varying, '-', favorable)
+#main.wd <- '/project/coexistence/cwerner5/'  # needs to be updated (ideally with here() package)
+ main.wd <- './'
+
+file.in <- paste0(main.wd, 'model-parameters/model-parameters_', file.core, '.csv')
+
+file.out <- paste0(main.wd, 'model-data/mct-partitions_', 'autocorrelation_', file.core, '.RData')
+
+# SET PARAMETER VALUES 
+pars <- read.csv(file.in) 
 
 # select the relevant parameter set
 if(pair == 'as.an') {
-  pars <- pars.as.an
   sp.1 <- 'an'
   sp.2 <- 'as'
-  sp.order <- c('an','as') 
-  
+  sp.order <- c('an','as')
+pars <- pars %>% mutate(stem.surv = NULL) 
 }
 if(pair == 'p.an'){
-  pars <- pars.p.an
   sp.1 <- 'an'
   sp.2 <- c('s','p')
   sp.order <- c('an','s','p')
+pars <- pars %>% mutate(seed.surv = NULL)
 }
 
-
 # number of time steps for each run
-time.warm.up <- 50
-time.full <- 100
-
-# initialise dataframe
-  partitions.env <- tibble(sp.invader = character(), sp.resident = character(),
-                           partition = character(),
-                           inv = numeric(), res = numeric(), delta = numeric(), 
-                           env.ratio = numeric())
-  env.seq <- seq(0, 1, by = 0.25) # ratio of wet years to dry years
+time.warm.up <- 20
+time.full <- 50
+env.ratio <- 0.5
   
-  for(env.ratio in env.seq){
-    # adding rows for the weighted average of the parameters
-    pars.2 <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1 - env.ratio))
-    
-    pars.ave <- pars.2 %>% 
-      group_by(species) %>%
-      summarise_if(is.numeric,
-                   ~ weighted.mean(., weight)) %>%
-      mutate(weight = NA, treatment = 'average') %>% 
-      arrange(factor(species, levels = sp.order)) # need to keep them in the right order for later
-    
-    pars.2 <- pars.2 %>% full_join(pars.ave)
-    
-    
-    env.draw <- rbinom(time.full, 1, env.ratio) # sequence of the environment (NOTE: would want this to change if doing multiple runs)
-    env.condition <- if_else(env.draw > 0, 'wet','dry')
-    
-    partitions <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars.2, 
-                                     env.condition, time.warm.up, time.full) %>%
-      rbind(partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars.2, 
-                               env.condition, time.warm.up, time.full)) %>%
-      #pivot_longer(cols = inv.e0:res.eint) %>%
-      pivot_longer(cols = inv.e0:res.storage) %>%
-      separate(name, into = c('player', 'partition')) %>%
-      pivot_wider(names_from = player, values_from = value) %>%
-      mutate(delta = inv - res,
-             partition = factor(partition, 
-                                levels = c('full','e0','el','ea','eint', 'storage','nocov')))
-    partitions$env.ratio <- env.ratio
-    
-    partitions.env <- full_join(partitions.env, partitions, 
-                                by = c('sp.invader','sp.resident','partition',
-                                       'inv','res', 'delta','env.ratio'))
+partitions.env <- tibble(sp.invader = character(), sp.resident = character(),
+                         partition = character(),
+                         inv = numeric(), res = numeric(), delta = numeric(), 
+                         env.auto = numeric())
+env.auto.seq <- seq(-0.9, 0.9, by = 0.3) # autocorrelation strengths
+  
+for(env.auto in env.auto.seq){
+  # adding rows for the weighted average of the parameters
+  # this could be moved out of the for loop for the autocorrelation version but 
+  # leaving it here in case we want it to be a nested loop later
+  pars.2 <- pars %>% mutate(weight = ifelse(treatment == 'wet', env.ratio, 1 - env.ratio))
+  
+  pars.ave <- pars.2 %>% 
+    group_by(species) %>%
+    summarise_if(is.numeric,
+                 ~ weighted.mean(., weight)) %>%
+    mutate(weight = NA, treatment = 'average') %>% 
+    arrange(factor(species, levels = sp.order))
+  
+  pars.2 <- pars.2 %>% full_join(pars.ave)
+  
+  
+  # ADDED IN AUTOCORRELATION WHICH WILL WORK FOR ALL THE PARTITIONS EXCEPT THE STORAGE EFFECT ONE
+  env.from.a <- env.ratio + env.auto/2 # symmetrical autocorrelation--likelihood of going to a from a
+  env.from.b <- env.ratio - env.auto/2 # likelihood of going to a from b
+  
+  env.draw.a <- rbinom(time.full, 1, env.from.a) # env list if coming from a wet year (a)
+  env.draw.b <- rbinom(time.full, 1, env.from.b) # env list of coming from a dry year (b)
+  
+  env.draw <- vector(length = time.full)
+  env.draw[1] <- rbinom(1, 1, env.ratio)
+  for(i in 2:time.full){
+    env.draw[i] <- ifelse(env.draw[i-1]==1, env.draw.a[i], env.draw.b[i])
   }
   
-  partitions.env <- partitions.env  %>%
-    mutate(partition = factor(partition, 
+  env.condition <- if_else(env.draw > 0, 'wet','dry')
+  
+  partitions <- partition_epsilons(sp.inv = sp.2, sp.res = sp.1, pars.2, 
+                                   env.condition, time.warm.up, time.full) %>%
+    rbind(partition_epsilons(sp.inv = sp.1, sp.res = sp.2, pars.2, 
+                             env.condition, time.warm.up, time.full)) %>%
+    pivot_longer(cols = inv.e0:res.storage) %>%
+    separate(name, into = c('player', 'partition')) %>%
+    pivot_wider(names_from = player, values_from = value) %>%
+    mutate(delta = inv - res,
+           partition = factor(partition, 
+                              levels = c('full','e0','ea','el','eint', 'storage','nocov')))
+  partitions$env.auto <- env.auto
+  
+  partitions.env <- full_join(partitions.env, partitions, 
+                              by = c('sp.invader','sp.resident','partition',
+                                     'inv','res', 'delta','env.auto'))
+}
+
+partitions.env <- partitions.env  %>%
+  mutate(partition = factor(partition, 
                             levels = c('full','e0','el','ea','eint',
                                        'storage','nocov')))
   
@@ -996,24 +703,42 @@ time.full <- 100
   'storage' = expression(Delta^(alpha*lambda)), 
   'nocov' = expression(Delta^{alpha!=lambda})
 )
+  # Titles for invasion interactions
+if(pair == 'as.an'){
+  species_names <- c(
+    an = 'AN invades AS',
+    as = 'AS invades AN'
+  )
+  #file.out <- 'partitions-AS-AN.pdf'
+}
+if(pair == 'p.an'){
+  species_names <- c(
+    an = 'AN invades P',
+    s.p = 'P invades AN'
+  )
+ # file.out <- 'partitions-P-AN.pdf'
+}
+  cb_palette <- c("black", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00")
+colors2 <- c("#749dae", rep('darkslategrey', times = 4), rep("#f3c483", times = 2))
+
   
-  ggplot(partitions.env, aes(x = env.ratio, y = delta, color = partition)) +
+  ggplot(partitions.env, aes(x = env.auto, y = delta, color = partition)) +
   facet_grid(cols = vars(sp.invader),
              labeller = labeller(sp.invader = species_names)) + 
   geom_line() +
   theme_cw() +
   scale_color_manual(values = cb_palette, labels = partition.legend, name = 'Partition') +
-  xlab ('Proportion wet years') +
+  xlab ('Environmental autcorrelation') +
   ylab('Delta')
 
 ```
 
-# Loading in rdata file from partitions run on the computer cluster
 
+# Loading in rdata file from partitions run on the computer cluster
 ```{r partition-seq}
 
-# case <- 'as'
- case <- 'p'
+ case <- 'as'
+# case <- 'p'
 
 # do only lambda/germination/survival terms vary by environment or do the alpha terms vary too?
 # varying <- 'lambda'
@@ -1081,8 +806,7 @@ partition.legend <- c(
   'nocov' = expression(Delta^{alpha!=lambda})
 )
 
-cb_palette <- c("black", "#009E73", "#56B4E9", "#E69F00", "darkorchid4",
-                            "#D55E00", "#0072B2")
+cb_palette <- c("black", "#009E73", "#56B4E9", "#E69F00","#F0E442", "#D55E00","#0072B2")
 
 # plotting across the ratio of environmental conditions
 ggplot(part.sum, aes(x = env.ratio)) +
@@ -1098,7 +822,7 @@ ggplot(part.sum, aes(x = env.ratio)) +
   xlab ('Ratio of env 1 to env 2') +
   ylab('Delta')
 
- # ggsave(plot.out.env, width = 8, height = 5, units = 'in')
+  ggsave(plot.out.env, width = 8, height = 5, units = 'in')
 
 # plotting for just the 50-50 condition
 ggplot(filter(part.sum, env.ratio == 0.5), 
@@ -1120,7 +844,7 @@ ggplot(filter(part.sum, env.ratio == 0.5),
                    name = 'Partition') +
   scale_fill_manual(values = cb_palette) +
   guides(fill = 'none')
-#ggsave(plot.out.50, width = 8, height = 5, units = 'in')
+ggsave(plot.out.50, width = 8, height = 5, units = 'in')
 
 
 # hist for the 50-50 condition
@@ -1149,7 +873,7 @@ ggplot(filter(part.long, run %in% unique(part.long$run)[1:20]),
   xlab ('Ratio of env 1 to env 2') +
   ylab('Delta') +
   theme(legend.position = 'none')
-#ggsave(plot.out.sp.delta, width = 6, height = 8, units = 'in')
+ggsave(plot.out.sp.delta, width = 6, height = 8, units = 'in')
 
 ## Plotting individual runs (resident)
 ggplot(filter(part.long, run %in% unique(part.long$run)[1:20]), 
@@ -1186,3 +910,4 @@ ggsave(plot.out.sp.inv, width = 6, height = 8, units = 'in')
 #   print(., include.rownames = FALSE)
 
 ```
+
