@@ -15,7 +15,7 @@ theme_cw <- function () {
     theme(
       panel.background = element_blank(), 
       plot.background = element_blank(), 
-      axis.ticks = element_line(colour = "grey70", size = rel(0.5)),
+      axis.ticks = element_line(colour = "grey70", linewidth = rel(0.5)),
       panel.grid.minor = element_blank(), 
       panel.grid.major.x = element_blank(),
       legend.background = element_blank(), 
@@ -113,7 +113,7 @@ part.sum.inv <- part.sum.all %>%
          partition %in% c('full', 'e0', 'el', 'ea', 'eint'))
 
 environmental_condition <- as_labeller(c(
-  opposite_consistent = "Opposite env favorable",
+  opposite.consistent = "Opposite env favorable",
   same.consistent = "Same env favorable \n competition stronger",
   same.flipped = "Same env favorable \n competition weaker",
   s.p = "Invader: Perennial \n Resident: Nonseedbanking Annual",
@@ -208,7 +208,7 @@ part.sum.supp.2 %>% ggplot(aes(x = proportion.favorable)) +
   xlab ('Frequency of environment favorable for stage-structured species\' density-independent growth') +
   ylab('Partitioning of low density growth rate')
 
-# ggsave('mct-partitions_figure-supp-2.pdf', width = 8.5, height = 8.5, units = 'in')
+# ggsave('figures/mct-partitions_figure-supp-2.pdf', width = 8.5, height = 8.5, units = 'in')
  
 
 # Supplemental figure matching Figure 3
@@ -289,7 +289,7 @@ part.sum.inv.same.flipped %>% ggplot(aes(x = proportion.favorable)) +
   ylab('Partitioning of low density growth rate') +
   ggtitle('Scenario 2: Same Environment Favorable; Competition Weaker')
 
- ggsave('mct-partitions_figure-supp_dir-2a.pdf', width = 8.5, height = 8.5, units = 'in')
+# ggsave('mct-partitions_figure-supp_dir-2a.pdf', width = 8.5, height = 8.5, units = 'in')
 
 # Same environment favorable, competition stronger in favorable environment
 part.sum.inv.same.consistent <- part.sum.inv.long %>% filter(env.case == 'same.consistent')
@@ -315,7 +315,7 @@ part.sum.inv.same.consistent %>% ggplot(aes(x = proportion.favorable)) +
   ylab('Partitioning of low density growth rate') +
   ggtitle('Scenario 3: Same Environment Favorable; Competition Stronger')
 
- ggsave('mct-partitions_figure-supp_dir-2b.pdf', width = 8.5, height = 8.5, units = 'in')
+# ggsave('mct-partitions_figure-supp_dir-2b.pdf', width = 8.5, height = 8.5, units = 'in')
 
 
 ```
@@ -371,7 +371,7 @@ part.sum.res.same.flipped %>% ggplot(aes(x = proportion.favorable)) +
   ylab('Partitioning of low density growth rate') +
   ggtitle('Scenario 2: Same Environment Favorable; Competition Weaker')
 
- ggsave('mct-partitions_figure-supp_dir-3a.pdf', width = 8.5, height = 8.5, units = 'in')
+# ggsave('mct-partitions_figure-supp_dir-3a.pdf', width = 8.5, height = 8.5, units = 'in')
 
 # Same environment favorable, competition stronger in favorable environment
 part.sum.res.same.consistent <- part.sum.res.long %>% filter(env.case == 'same.consistent')
@@ -397,7 +397,7 @@ part.sum.res.same.consistent %>% ggplot(aes(x = proportion.favorable)) +
   ylab('Partitioning of low density growth rate') +
   ggtitle('Scenario 3: Same Environment Favorable; Competition Stronger')
 
- ggsave('mct-partitions_figure-supp_dir-3b.pdf', width = 8.5, height = 8.5, units = 'in')
+# ggsave('mct-partitions_figure-supp_dir-3b.pdf', width = 8.5, height = 8.5, units = 'in')
 
 ```
 
